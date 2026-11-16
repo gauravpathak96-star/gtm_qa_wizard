@@ -135,7 +135,14 @@ Recipes so far: lookfantastic.
 
 For MYP_NC, for example: "Pinterest - Search → Pinterest - Pixel - Search. Trigger was: Custom event view_item_list. Trigger now: elysiumEvent on /search/ only". It's labelled "likely" because it's matched from the exports, not seen firing.
 
-**Tags fired (not yet):** the "Tag fired" columns stay empty for now. Tag status comes from Tag Assistant, which these runs don't use yet. Tag Assistant does open in the tool's own browser without a sign-in, and a GTM Share preview link gives it access to the container. Reading it is being built: the preview check uses the workspace Share link, and the live check will use a Share link of the published live version.
+**Tags fired:** when a brand has both a workspace Share link (`preview_links`) and a Share link of the published live version (`live_links`), each journey connects Tag Assistant in the tool's own browser. No sign-in or remote debugging is needed.
+
+- **Page steps** record the tags fired on that page.
+- **In-page steps** (the consent click, Add to basket, the Checkout click) record only the tags that action added.
+
+These recorded tags fill the "Tag fired" columns and catch tags that stopped firing. To get a live-version link: GTM › Versions › the live version › Preview › Share.
+
+**Tag Assistant runs in both checks or in neither.** Its debug mode changes how some tags behave. On LookFantastic, a preview check with Tag Assistant against a live check without it showed 14 failures; with neither using it, there was 1. So without a live-version link, Tag Assistant is skipped in both checks and the run says so. `--no-tag-assistant` turns it off.
 
 ## Tests
 

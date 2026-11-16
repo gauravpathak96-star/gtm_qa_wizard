@@ -2,6 +2,16 @@
 
 Every change adds an entry here, newest first.
 
+## 2026-11-16 · Tag Assistant in the run
+
+- **Tag Assistant runs in the tool's own browser.** Each journey opens the brand's Share link in Tag Assistant, clicks Connect and runs the journey in the tab it opens, in debug mode. Tag Assistant needs no sign-in, and there's no remote debugging of your Chrome.
+  - Page steps record the newest page's fired and failed tags, read from its Tags tab.
+  - In-page steps (consent click, Add to basket, Checkout click) record only the tags they added.
+- **Tag Assistant's "Connected" badge covered the cookie banner's buttons.** It's now hidden on the site tab, and Tag Assistant keeps working.
+- **Release files get `live_links`:** a Share link of the published live version, per brand.
+- **Tag Assistant runs only when a brand has both `live_links` and `preview_links`, and then in both checks.** On LookFantastic, Tag Assistant in the preview check only gave 14 failures, against 1 with neither check using it, because debug mode changes how some tags behave. Without both links it's skipped in both checks and the run explains why. `--no-tag-assistant` turns it off.
+- **The report skips brands that have no recipe yet,** instead of stopping.
+
 ## 2026-11-16 · Likely cause, key values and noise events
 
 - **Likely cause:** with container exports loaded, every failed row names the tag of that vendor whose job matches the event that broke. It shows the old and new names, the trigger before and after, and the settings that changed. On MYP_NC it names "Pinterest - Search → Pinterest - Pixel - Search", "Tiktok - Search → TikTok - cHTML - Search" (trigger moved from view_item_list to elysiumEvent on /search/) and the new "GA4 - Event - Organic Search Visit".

@@ -20,13 +20,20 @@ def _read_json(p):
     return json.loads(p.read_text(encoding="utf-8"))
 
 
+def _noise(site):
+    try:
+        return release.recipe(site).get("noise_events", [])
+    except ValueError:   # no recipe yet: the brand can't have been run either
+        return []
+
+
 def gather(name):
     rel = release.load(name)
     brands = []
     for b in rel["brands"]:
         d = release.RUNS / name / b["site"]
         item = {"site": b["site"], "url": b.get("url", ""), "preview_links": b["preview_links"],
-                "noise_events": release.recipe(b["site"]).get("noise_events", [])}
+                "noise_events": _noise(b["site"])}
         for check in release.CHECKS:
             f = d / check / "results.json"
             item[check] = _read_json(f) if f.exists() else None

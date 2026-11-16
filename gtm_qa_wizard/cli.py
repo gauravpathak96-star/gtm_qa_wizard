@@ -105,7 +105,7 @@ def cmd_run(a):
           f"(about {n} min)")
     res = runner.run_check(a.release, "live" if check == "live" else "preview", headed=a.headed,
                            only=[b["site"] for b in rel["brands"]], log=print,
-                           no_preview=a.without_workspace)
+                           no_preview=a.without_workspace, no_ta=a.no_tag_assistant)
     bad = [s for s, r in res.items() if not r["ok"]]
     print(f"\nDone: {len(res) - len(bad)} of {len(res)} brand(s) completed every step." +
           (f" Steps didn't complete on: {', '.join(bad)} (see the screenshots in runs/{a.release}/<brand>/{check}/)." if bad else ""))
@@ -156,6 +156,7 @@ def main(argv=None):
     p.add_argument("--headed", action="store_true", help="show the browser window while it runs")
     p.add_argument("--without-workspace", action="store_true",
                    help="noise test: run the preview check on the live container, so Live is compared with Live")
+    p.add_argument("--no-tag-assistant", action="store_true", help="don't connect Tag Assistant (no tag data, slightly faster)")
     p.set_defaults(fn=cmd_run)
     p = sub.add_parser("report", help="compare live and preview and open the report")
     p.add_argument("release")

@@ -61,6 +61,71 @@ DL_VALUES_JS = """() => {
 }"""
 
 
+# Tag Assistant: the tags fired on the newest page, as its Tags tab lists them
+TA_READ = """() => [...document.querySelectorAll('.tags-tab__fired-tags .tags-tab__tag')].map(t => ({
+  name: ((t.querySelector('.wd-fired-tag-name') || {}).innerText || '').trim(),
+  label: ((t.querySelector('.wd-summary-label') || {}).innerText || '').trim()}))"""
+
+
+class TagAssistant:
+    """Tag Assistant in a tab of the same browser context, connected through a GTM Share preview link.
+    It opens the site in a new tab in debug mode; the journey then runs in that tab. After each step
+    the newest page's Tags tab is read: a page step gets that page's tags, an in-page step (the
+    consent click, add to basket, the checkout click) gets only the tags it added."""
+
+    def __init__(self, ctx, link):
+        self.ctx, self.link = ctx, link
+        self.tab = ctx.new_page()
+        self.last_groups, self.last = 0, {}
+
+    def connect(self):
+        self.tab.goto(self.link, wait_until="domcontentloaded", timeout=45000)
+        btn = self.tab.locator("button.wd-start-debugging-button")
+        btn.wait_for(timeout=20000)
+        with self.ctx.expect_page(timeout=30000) as pi:
+            btn.click()
+        site = pi.value
+        site.wait_for_load_state("domcontentloaded", timeout=45000)
+        return site
+
+    def dismiss(self):
+        try:
+            self.tab.get_by_role("button", name="Continue").click(timeout=1500)
+        except Exception:
+            pass
+
+    def read(self):
+        """Tags fired at this step: [{name, status, count}]."""
+        self.dismiss()
+        groups = self.tab.locator(".message-list__group .message-list__row--group")
+        n = groups.count()
+        if not n:
+            return []
+        groups.first.click(timeout=5000)
+        self.tab.wait_for_timeout(1200)
+        now = {}
+        for t in self.tab.evaluate(TA_READ):
+            m = re.search(r"(Fired|Failed)\s+(\d+)\s+time", t["label"])
+            if t["name"] and m:
+                k = (t["name"], "failed" if m.group(1) == "Failed" else "fired")
+                now[k] = now.get(k, 0) + int(m.group(2))
+        same_page = n == self.last_groups
+        out = []
+        for (name, status), c in now.items():
+            c = c - (self.last.get((name, status), 0) if same_page else 0)
+            if c > 0:
+                out.append({"name": name, "status": status, "count": c})
+        self.last_groups, self.last = n, now
+        return out
+
+
+HIDE_TA_BADGE = """(() => { if (window.top !== window) return;
+  // the badge sets its own inline styles, so it's hidden from a timer rather than a style sheet
+  const hide = () => document.querySelectorAll('iframe.__TAG_ASSISTANT_BADGE, .__TAG_ASSISTANT_BADGE').forEach(e => {
+    e.style.setProperty('display', 'none', 'important'); e.style.setProperty('pointer-events', 'none', 'important'); });
+  setInterval(hide, 300); document.addEventListener('DOMContentLoaded', hide); })()"""
+
+
 def parse_preview(link):
     """Container ID, gtm_auth and gtm_preview from a GTM Share preview link."""
     txt = link
@@ -114,7 +179,7 @@ def journey_steps(recipe):
 class Journey:
     """One journey (opt-in or opt-out) in its own fresh browser context."""
 
-    def __init__(self, browser, brand, recipe, check, journey, product_url, log):
+    def __init__(self, browser, brand, recipe, check, journey, product_url, log, ta_link=""):
         self.brand, self.recipe, self.check, self.journey, self.log = brand, recipe, check, journey, log
         self.base = brand["url"].rstrip("/")
         self.product_url = product_url
@@ -134,12 +199,21 @@ class Journey:
             loader = re.compile("|".join(recipe.get("gtm_loader_patterns") or [r"googletagmanager\.com/gtm\.js"]), re.I)
             self.ctx.route(loader, self.route_loader)
         self.ctx.on("request", self.on_request)
-        self.page = self.ctx.new_page()
-        self.page.add_init_script(QA_JS)
+        self.ctx.add_init_script(QA_JS)
+        self.ta = TagAssistant(self.ctx, ta_link) if ta_link else None
+        if self.ta:   # Tag Assistant's "Connected" badge sits over the cookie banner: hide it (it keeps working)
+            self.ctx.add_init_script(HIDE_TA_BADGE)
+        self.ta_note = ""
+        self.page = None if self.ta else self.ctx.new_page()
 
     def on_request(self, req):
         if req.resource_type in IGNORED_TYPES or not req.url.startswith("http"):
             return
+        try:   # only the site's own tab, never Tag Assistant's
+            if self.page is None or (req.frame and req.frame.page is not self.page):
+                return
+        except Exception:
+            pass
         try:
             post = req.post_data
         except Exception:
@@ -276,6 +350,12 @@ class Journey:
             rec["url"] = self.page.url.split("?")[0]
             rec["capture_gaps"] = ["all vendors (the capture script couldn't run on this page)"]
             rec["notes"] = "Capture failed: " + str(e).splitlines()[0][:200]
+        if self.ta and not self.ta_note:
+            try:
+                rec["tags"] = self.ta.read()
+            except Exception as e:
+                rec["tags"] = []
+                self.ta_note = "Tag Assistant stopped answering at " + name + ": " + str(e).splitlines()[0][:120]
         try:
             rec["variables"] = self.page.evaluate(DL_VALUES_JS)
         except Exception:
@@ -283,7 +363,8 @@ class Journey:
         named = sorted({h["vendor"] for h in rec.get("hits") or [] if not str(h["vendor"]).startswith("Unrecognised")})
         calls = sum(h.get("count", 1) for h in rec.get("hits") or [])
         mark = "✓" if status == "ok" else "✗"
-        self.log(f"    {mark} {name:15} {calls:4} calls · {len(named):2} vendors" + (f" · {error}" if error else ""))
+        tags = f" · {len(rec['tags']):2} tags" if self.ta and "tags" in rec else ""
+        self.log(f"    {mark} {name:15} {calls:4} calls · {len(named):2} vendors{tags}" + (f" · {error}" if error else ""))
         return rec
 
     def run(self, out_dir):
@@ -292,7 +373,16 @@ class Journey:
         try:
             # Before consent: the landing page as a fresh visitor, banner untouched
             self.current = "Before consent"
-            self.page.goto(self.base + "/", wait_until="domcontentloaded", timeout=45000)
+            if self.ta:
+                try:
+                    self.page = self.ta.connect()   # Tag Assistant opens the site in debug mode
+                except Exception as e:
+                    self.ta_note = "Tag Assistant didn't connect: " + str(e).splitlines()[0][:120]
+                    self.log("    ! " + self.ta_note + ". Continuing without tag data.")
+                    self.ta = None
+                    self.page = self.ctx.new_page()
+            if not self.ta:
+                self.page.goto(self.base + "/", wait_until="domcontentloaded", timeout=45000)
             seen = self.banner_visible(WAIT_S)
             self.settle()
             steps.append(self.save("Before consent", "direct", ["Opened " + self.base + "/ as a fresh visitor",
@@ -354,7 +444,7 @@ class Journey:
             pass
 
 
-def run_check(name, check, headed=False, only=None, log=print, no_preview=False):
+def run_check(name, check, headed=False, only=None, log=print, no_preview=False, no_ta=False):
     """Run one check for every brand of the release (or just `only`). Returns {site: summary}."""
     from playwright.sync_api import sync_playwright
     rel = release.load(name)
@@ -374,15 +464,25 @@ def run_check(name, check, headed=False, only=None, log=print, no_preview=False)
             log(f"\n{b['site']} · {check}" + (f" · product {urlparse(product).path}" if product else ""))
             started = datetime.now().isoformat(timespec="seconds")
             results = {"meta": {}, "steps": [], "optout": {"steps": []}}
-            applied, loaded = set(), set()
+            applied, loaded, ta_used, ta_notes = set(), set(), False, []
+            if not no_ta and b["preview_links"] and not b.get("live_links"):
+                ta_notes.append("Tag Assistant not used: it runs only when the brand has a live-version Share link too, "
+                                "because its debug mode changes how some tags behave and both checks must run the same way")
+                log("  Tag Assistant skipped: add a live-version Share link (live_links) to record tags in both checks")
             for j in rel["journeys"]:
                 log(f"  {j} journey (fresh visitor, {'Accept all' if j == 'opt-in' else 'Reject all'})")
-                jr = Journey(browser, b, recipe, check, j, product, log)
+                # Tag Assistant's debug mode changes how some tags behave, so it runs in both checks or in neither
+                ta_link = "" if no_ta or not (b["preview_links"] and b.get("live_links")) else \
+                    (b["preview_links"][0] if check == "preview" else b["live_links"][0])
+                jr = Journey(browser, b, recipe, check, j, product, log, ta_link)
                 try:
                     steps = jr.run(out_dir)
                 finally:
                     jr.close()
                 product = product or jr.product_url
+                ta_used = ta_used or bool(jr.ta)
+                if jr.ta_note:
+                    ta_notes.append(f"{j}: {jr.ta_note}")
                 applied.update(jr.applied)
                 for s in steps:
                     loaded.update(s.get("containers") or [])
@@ -399,7 +499,9 @@ def run_check(name, check, headed=False, only=None, log=print, no_preview=False)
                                "tester": rel.get("tester", ""), "started": started, "product_url": product,
                                "capture_version": CAPTURE_VERSION, "capture_method": "playwright",
                                "tool": "gtm-qa-wizard " + __version__,
-                               "tag_assistant": "not used: findings come from the calls that reached each vendor",
+                               "tag_assistant": ("connected through the " + ("workspace" if check == "preview" else "live version") + " Share link"
+                                                 + ("; " + "; ".join(ta_notes) if ta_notes else "")) if ta_used else
+                                                ("; ".join(ta_notes) or "not used: findings come from the calls that reached each vendor"),
                                "gtm_containers_loaded": sorted(loaded), "preview_applied_to": sorted(applied)}
             (out_dir / "results.json").write_text(json.dumps(results, indent=1), encoding="utf-8")
             if product and not st.get("product_url"):

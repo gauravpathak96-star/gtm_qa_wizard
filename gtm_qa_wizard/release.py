@@ -41,8 +41,11 @@ BRAND = """
 # Site recipe in sites/{site}.json (how to click through the site)
 site = "{site}"
 # GTM › Preview › Tag Assistant › ⋮ › Share, one link per container this release changes on this brand.
-# Needed for the preview check only.
+# Needed for the preview check. Tag Assistant also uses it to record which tags fired.
 preview_links = [""]
+# Optional: a Share link of the published live version (GTM › Versions › the live version › Preview › Share),
+# so the live check records which tags fired too.
+live_links = [""]
 # Optional: GTM container exports, so renamed and re-created tags are paired.
 # Admin › Export Container: the live version (before) and the workspace (after).
 exports_before = ""
@@ -90,6 +93,7 @@ def load(name):
         brands = [{k: rel.get(k) for k in ("site", "url", "preview_links", "product_url", "exports_before", "exports_after") if rel.get(k) is not None}]
     for b in brands:
         b["preview_links"] = [l for l in (b.get("preview_links") or []) if str(l).strip()]
+        b["live_links"] = [l for l in (b.get("live_links") or []) if str(l).strip()]
         if not b.get("url"):
             try:
                 b["url"] = recipe(b["site"]).get("url", "")
@@ -116,9 +120,9 @@ def problems(rel, check=None):
             out.append(("error", f"{s}: no homepage: add url to the brand or to sites/{s}.json"))
         if check == "preview" and not b["preview_links"]:
             out.append(("error", f"{s}: preview_links is empty, so the preview check can't load the workspace"))
-        for l in b["preview_links"]:
+        for l in b["preview_links"] + b["live_links"]:
             if "gtm_auth" not in l or "gtm_preview" not in l:
-                out.append(("error", f"{s}: a preview link has no gtm_auth / gtm_preview: copy it from Tag Assistant › ⋮ › Share"))
+                out.append(("error", f"{s}: a Share link has no gtm_auth / gtm_preview: copy it from Tag Assistant › ⋮ › Share"))
         for side in ("before", "after"):
             f = b.get(f"exports_{side}", "")
             if f and not Path(f).expanduser().exists() and not (ROOT / f).exists():
