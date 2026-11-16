@@ -32,8 +32,8 @@ Results go to `runs/<release>/<live|preview>/results.json`. The first check's pr
 Company Macs inspect downloads with Aikido, and the built-in macOS Python can't read its certificates. So setup uses `uv`, which installs its own Python and uses the Mac's certificate store. If `uv` isn't installed, ask IT.
 
 ```
-git clone git@github.com:gauravpathak96-star/gtm-qa-wizard.git
-cd gtm-qa-wizard
+git clone git@github.com:gauravpathak96-star/gtm_qa_wizard.git
+cd gtm_qa_wizard
 uv sync --native-tls
 uv run playwright install chromium
 uv run gtm-qa check-setup
