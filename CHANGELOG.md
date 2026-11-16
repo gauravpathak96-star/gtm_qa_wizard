@@ -2,6 +2,28 @@
 
 Every change adds an entry here, newest first.
 
+## 2026-11-16 · Storefront and checkout Share links, one field each
+
+- **Release files name each link:** `storefront_preview_link`, `storefront_live_link`, `checkout_preview_link`, `checkout_live_link`, one link each (no list). Every brand gets all four; the checkout ones stay empty when the site uses one container. Older files with `preview_links` / `live_links` still work, but a brand can't mix both layouts.
+- **Each field has its own `# =====` header** saying what goes in it (`gtm-qa new` and `releases/example.toml`).
+- **Tag Assistant pairs links by container:** the storefront's preview and live links, or the checkout's when only the checkout has both, so both checks follow the same container. `checkout_live_link` isn't used otherwise yet.
+- **A live link with no site URL now connects:** the tool adds the homepage (`url=`) to the Tag Assistant link, so the Connect button isn't left disabled.
+- `gtm-qa check` also flags the same container in both storefront and checkout preview links, and a missing live link (no tag data).
+- Tested: all layouts load to the right links and Tag Assistant pair, and a real LF preview journey from `storefront_preview_link` loaded the workspace (GTM-NHWTTFSL, PREVIEW env-2044) on every step.
+
+## 2026-11-16 · Purchase on request, cheapest product by default
+
+- **`purchase = "yes" / "no"`** in the release file (default "no"; a brand can override it). With "yes", the browser window opens and the run stops after Checkout. The tester places the order, then presses Enter in the terminal once the confirmation page shows (`s` + Enter skips it). Everything sent until then is recorded as a **Purchase** step. The browser keeps working while it waits, so the preview container still loads on the payment and confirmation pages.
+- **Cheapest product by default** (`product = "cheapest"`): the Product step opens the lowest-priced product on the category page, reading the tile's price element, not the product name ("Worth £665"). A product whose Add to basket button is missing or disabled is skipped for the next cheapest. `product = "first"` keeps the old `product_index` tile. Recipes can add `price_selector` if prices aren't found.
+- **`gtm-qa check` catches a workspace link in `live_links`**: the same `gtm_preview` in `live_links` and `preview_links` is an error, because the live check would load the workspace.
+- Tested: the cheapest pick on all 6 recipes' category pages, and a full LF live journey (Laneige Midnight Minis, £20, every step completed). The purchase pause was tested with Enter and with `s` on a test page. No real order was placed.
+
+## 2026-11-16 · Key values show the dataLayer push that set them
+
+- `runner.py`: alongside each key value read from GTM's data model, the run records which `window.dataLayer` push last set that key: its event name (or none), its position, and how many pushes set it. Saved per step as `variable_sources`.
+- Report: in "Key values that broke", each Live and Preview value has a line under it, for example "Set by event view_cart (dataLayer push 3)". Results captured before this have no sources and show the value alone, so re-run a release to see them.
+- Tested: the capture script on a page with a sample dataLayer, and a report built from the thg-consent-template-fix Christophe Robin data with sample sources. The page drew without errors. The MYP_NC test skipped (fixture not on this computer).
+
 ## 2026-11-16 · One entry per account, key values compared across every call
 
 - `capture/qa-capture.js`: calls are grouped per account too (`tid`, `id`). Cult Beauty sends a Google Ads `page_view` to two accounts (AW-350752883 and AW-701660261) at every step. Before, both were merged into one entry that kept whichever call came first, so the report showed accounts "changing" between checks. Results captured before this need a re-run to benefit.

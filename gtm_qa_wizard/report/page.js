@@ -53,8 +53,15 @@ function checkInfo(b,cmp){
 // a failed row's detail: why it failed, then the likely cause from the exports
 const rowHtml=x=>{let h=rgRowHtml(x,false);const lc=x.st==='fail'?likelyCause(x):[];
   if(lc.length)h=h.replace('</ul></td>',lc.map(t=>'<li><b>Likely cause (from the exports):</b> '+esc(t)+'</li>').join('')+'</ul></td>');return h;};
-const varTable=V=>'<div class="tablewrap"><table><thead><tr><th>Result</th><th>Journey / action</th><th>Variable</th><th>Live</th><th>Preview</th><th>What</th></tr></thead><tbody>'
-  +V.map(r=>'<tr><td>'+pill('fail','Failed')+'</td><td>'+esc(r.scen+' · '+r.action.name)+'</td><td class="mono">'+esc(r.tag)+(r.was?'<div class="why">was '+esc(r.was)+'</div>':'')+'</td><td class="mono">'+esc(String(r.live).slice(0,200))+'</td><td class="mono">'+esc(String(r.cur).slice(0,200))+'</td><td>'+esc(r.what)+(r.detail.length?'<div class="why">'+r.detail.map(esc).join('<br>')+'</div>':'')+'</td></tr>').join('')+'</tbody></table></div>';
+// the dataLayer push that last set a key at a step, as the runner recorded it (runs from before this have none)
+function dlSource(raw,scen,stepName,key){
+  if(!raw)return'';const L=scen==='Opt-out'?((raw.optout||{}).steps||[]):(raw.steps||[]);
+  const st=L.find(s=>s.name===stepName);const x=st&&st.variable_sources&&st.variable_sources[key];if(!x)return'';
+  return'Set by '+(x.event?'event '+x.event:'a push with no event')+' (dataLayer push '+x.push+(x.pushes>1?', last of '+x.pushes+' pushes setting it':'')+')';
+}
+const srcDiv=t=>t?'<div class="why">'+esc(t)+'</div>':'';
+const varTable=(V,b)=>'<div class="tablewrap"><table><thead><tr><th>Result</th><th>Journey / action</th><th>Variable</th><th>Live</th><th>Preview</th><th>What</th></tr></thead><tbody>'
+  +V.map(r=>'<tr><td>'+pill('fail','Failed')+'</td><td>'+esc(r.scen+' · '+r.action.name)+'</td><td class="mono">'+esc(r.tag)+(r.was?'<div class="why">was '+esc(r.was)+'</div>':'')+'</td><td class="mono">'+esc(String(r.live).slice(0,200))+srcDiv(dlSource(b.live,r.scen,r.action.name,r.was||r.tag))+'</td><td class="mono">'+esc(String(r.cur).slice(0,200))+srcDiv(dlSource(b.preview,r.scen,r.action.name,r.tag))+'</td><td>'+esc(r.what)+(r.detail.length?'<div class="why">'+r.detail.map(esc).join('<br>')+'</div>':'')+'</td></tr>').join('')+'</tbody></table></div>';
 const out=[];let html='';
 R.brands.forEach((b,i)=>{
   const {G,LS,cmp,V}=brandResult(b);const nf=G.failed.length+V.length;
@@ -68,7 +75,7 @@ R.brands.forEach((b,i)=>{
     +(G.pairs.length?'<p class="line"><b>'+(nf?'Failed':'Passed')+': '+nf+' failed of '+G.checked+' checked</b>'+(V.length?' ('+G.failed.length+' in vendor calls, '+V.length+' key value'+(V.length>1?'s':'')+')':'')+' · Default / Live vs Preview'+(G.notes.length?'<br><span class="muted">'+esc(G.notes.join(' · '))+'</span>':'')+'</p>'
       +(G.failed.length?'<div class="tablewrap"><table><thead><tr><th>Result</th><th>Journey / action</th><th>Getting tracked? (Live)</th><th>Getting tracked? (Preview)</th><th>Tag fired (Live)</th><th>Tag fired (Preview)</th></tr></thead><tbody>'+G.failed.map(rowHtml).join('')+'</tbody></table></div>'
         :'<p>Nothing failed in the vendor calls: every vendor that tracked on Live still tracks in Preview, with the same key values and consent behaviour.</p>')
-      +(V.length?'<h3>Key values that broke ('+V.length+')</h3><p class="muted">Values that carry tracking data (value, price, currency, items, IDs, consent) that are empty, broken or different in Preview. Values that change on every visit are left out.</p>'+varTable(V):'')
+      +(V.length?'<h3>Key values that broke ('+V.length+')</h3><p class="muted">Values read from the GTM dataLayer at the end of each step, under each value the push that set it. Values that carry tracking data (value, price, currency, items, IDs, consent) that are empty, broken or different in Preview. Values that change on every visit are left out.</p>'+varTable(V,b):'')
       +'<details><summary>Passed: '+passed.length+'</summary><div class="tablewrap"><table><thead><tr><th>Result</th><th>Journey / action</th><th>Getting tracked? (Live)</th><th>Getting tracked? (Preview)</th><th>Tag fired (Live)</th><th>Tag fired (Preview)</th></tr></thead><tbody>'+passed.map(x=>rgRowHtml(x,false)).join('')+'</tbody></table></div></details>'
       +(S.naming?det('Removed or added in this release: '+LS.ra.length,LS.ra.map(raTxt))+det('Settings changes that can affect tracking: '+LS.set.length,LS.set):'')
       +(G.cov.length?det('Not compared: '+G.cov.length,G.cov):'')

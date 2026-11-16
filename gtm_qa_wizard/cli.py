@@ -22,7 +22,7 @@ def cmd_new(a):
     print(f"Created {p.relative_to(release.ROOT)} with {len(sites)} brand(s): {', '.join(sites)}")
     if missing:
         print(f"! No site recipe yet for: {', '.join(missing)} (recipes so far: {', '.join(release.site_names())})")
-    print("Open it, paste each brand's GTM Share preview link and your name, then run:")
+    print("Open it, paste each brand's GTM Share links (storefront, and checkout if it's a separate container) and your name, then run:")
     print(f"  uv run gtm-qa check {a.release}")
 
 

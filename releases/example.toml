@@ -1,28 +1,120 @@
-# Example release file. Create your own with:  uv run gtm-qa new <release> --sites myprotein,lookfantastic
-# Real release files stay on your computer (git-ignored): preview links give access to your workspace.
+# Example release file. Create your own with:  uv run gtm-qa new <release> --sites lookfantastic,myprotein
+# Real release files stay on your computer (git-ignored): Share links give access to your workspace.
 
+# ======================================================================
+# Release name (the file name, don't change it)
+# ======================================================================
 name = "example"
 
+# ======================================================================
 # Your name, for the report
+# ======================================================================
 tester = "Example tester"
 
+# ======================================================================
 # What this release changes, in a sentence (shown in the report)
+# ======================================================================
 note = "Example: consent template fix in every brand's container"
 
+# ======================================================================
 # Journeys to run on every brand: opt-in (Accept all) and opt-out (Reject all)
+# ======================================================================
 journeys = ["opt-in", "opt-out"]
 
+# ======================================================================
+# Place an order at the end of each journey: "yes" or "no".
+# With "yes" the browser window opens and the run stops after Checkout so you can pay
+# yourself; press Enter in the terminal once the order confirmation page shows.
+# That's one order per journey per check (4 with both journeys).
+# A brand can override this with its own purchase = "yes" / "no".
+# ======================================================================
+purchase = "no"
+
+# ======================================================================
+# Which product to test: "cheapest" (the lowest-priced product on the category page
+# that can be added to the basket) or "first" (the recipe's product_index tile).
+# Live and Preview always test the same product.
+# ======================================================================
+product = "cheapest"
+
+# ######################################################################
+# Brand: lookfantastic
+# ######################################################################
 [[brands]]
+
+# ======================================================================
 # Site recipe in sites/lookfantastic.json (how to click through the site)
+# ======================================================================
 site = "lookfantastic"
-# GTM › Preview › Tag Assistant › ⋮ › Share, one link per container this release changes on this brand.
-preview_links = ["https://tagassistant.google.com/#/?id=GTM-XXXXXXX&gtm_auth=EXAMPLE&gtm_preview=env-5"]
+
+# ======================================================================
+# Storefront container (or the only container, if checkout uses the same one)
+# Workspace link: GTM › Preview › Tag Assistant › ⋮ › Share. Needed for the preview check.
+# ======================================================================
+storefront_preview_link = "https://tagassistant.google.com/#/?id=GTM-XXXXXXX&url=https%3A%2F%2Fwww.lookfantastic.com%2F&gtm_auth=EXAMPLE&gtm_preview=env-5"
+
+# ======================================================================
+# Storefront container, published live version: GTM › Versions › the live version ›
+# Preview › Share. Optional: with both storefront links, Tag Assistant records which tags fired.
+# ======================================================================
+storefront_live_link = "https://tagassistant.google.com/#/?id=GTM-XXXXXXX&url=https%3A%2F%2Fwww.lookfantastic.com%2F&gtm_auth=EXAMPLE&gtm_preview=181"
+
+# ======================================================================
+# Checkout container: only if checkout uses a different container than the storefront.
+# Leave empty when the site uses one container. Workspace link, as above.
+# ======================================================================
+checkout_preview_link = ""
+
+# ======================================================================
+# Checkout container, published live version. Not used yet: Tag Assistant follows one
+# container per run (the storefront's). Checkout tags still show in the vendor calls.
+# ======================================================================
+checkout_live_link = ""
+
+# ======================================================================
 # Optional: GTM container exports, so renamed and re-created tags are paired.
+# Admin › Export Container: the live version (before) and the workspace (after).
+# ======================================================================
 exports_before = ""
 exports_after = ""
 
+# ######################################################################
+# Brand: myprotein (example of a separate checkout container)
+# ######################################################################
 [[brands]]
+
+# ======================================================================
+# Site recipe in sites/myprotein.json (how to click through the site)
+# ======================================================================
 site = "myprotein"
-preview_links = ["https://tagassistant.google.com/#/?id=GTM-YYYYYYY&gtm_auth=EXAMPLE&gtm_preview=env-9"]
+
+# ======================================================================
+# Storefront container (or the only container, if checkout uses the same one)
+# Workspace link: GTM › Preview › Tag Assistant › ⋮ › Share. Needed for the preview check.
+# ======================================================================
+storefront_preview_link = "https://tagassistant.google.com/#/?id=GTM-YYYYYYY&gtm_auth=EXAMPLE&gtm_preview=env-9"
+
+# ======================================================================
+# Storefront container, published live version: GTM › Versions › the live version ›
+# Preview › Share. Optional: with both storefront links, Tag Assistant records which tags fired.
+# ======================================================================
+storefront_live_link = ""
+
+# ======================================================================
+# Checkout container: only if checkout uses a different container than the storefront.
+# Leave empty when the site uses one container. Workspace link, as above.
+# ======================================================================
+checkout_preview_link = "https://tagassistant.google.com/#/?id=GTM-ZZZZZZZ&gtm_auth=EXAMPLE&gtm_preview=env-3"
+
+# ======================================================================
+# Checkout container, published live version. Not used yet: Tag Assistant follows one
+# container per run (the storefront's). Checkout tags still show in the vendor calls.
+# ======================================================================
+checkout_live_link = ""
+
+# ======================================================================
+# Optional: GTM container exports, so renamed and re-created tags are paired.
+# Admin › Export Container: the live version (before) and the workspace (after).
+# ======================================================================
 exports_before = ""
 exports_after = ""

@@ -6,7 +6,9 @@ with no cookies and no consent choice. The steps are the same in every check:
   Before consent  open the homepage, leave the cookie banner alone
   Home            click Accept all (opt-in) or Reject all (opt-out)
   Category ...    then the site recipe's steps: category, product tile, add to basket,
-                  basket, checkout (never an order)
+                  basket, checkout
+  Purchase        only when the release says purchase = "yes": the run waits while the tester
+                  places the order in the browser window, then records the confirmation page
 
 Every request the page sends is recorded per step, including events inside request bodies
 (batched GA4, Meta's form data, TikTok's JSON). capture/qa-capture.js groups them exactly as the
@@ -16,10 +18,12 @@ container's gtm.js request, so the browser loads the workspace instead of the li
 """
 import json
 import re
+import select
+import sys
 import time
 from datetime import datetime
 from pathlib import Path
-from urllib.parse import parse_qsl, unquote, urlencode, urlparse, urlunparse
+from urllib.parse import parse_qsl, quote, unquote, urlencode, urlparse, urlunparse
 
 from . import __version__, release
 
@@ -36,6 +40,35 @@ STD_NAMES = {"home": "Home", "category": "Category", "product": "Product", "add_
              "add_to_cart": "Add to basket", "basket": "Basket", "cart": "Basket", "checkout": "Checkout",
              "begin_checkout": "Checkout"}
 VIA_OF_ACTION = {"goto": "direct", "click": "click", "click_random": "click"}
+# Product tiles with their price, cheapest first. A tile is the nearest ancestor of the link that holds a
+# price element; the price is the lowest amount in it (a sale price is below the RRP). Amounts that
+# follow "worth", "save" or "off" aren't prices, and product names ("Worth £665") sit outside the
+# price element. A recipe can name its price element with "price_selector".
+CHEAPEST_JS = r"""([sel, priceSel]) => {
+  const PRICE = priceSel || '[class*=price i], [data-price], [itemprop=price]';
+  const out = [];
+  [...document.querySelectorAll(sel)].slice(0, 80).forEach((a, i) => {
+    if (!a.getClientRects().length) return;
+    let t = a, els = [];
+    for (let k = 0; k < 8 && t; k++, t = t.parentElement) {
+      els = [...t.querySelectorAll(PRICE)].filter(e => !e.querySelector(PRICE));
+      if (els.length) break;
+    }
+    const amounts = [];
+    els.forEach(e => {
+      const txt = (e.getAttribute('content') || e.getAttribute('data-price') || '') + ' ' + e.innerText;
+      for (const m of txt.matchAll(/[£$€]\s?(\d[\d,]*(?:\.\d{1,2})?)/g)) {
+        const before = txt.slice(Math.max(0, m.index - 16), m.index), after = txt.slice(m.index + m[0].length, m.index + m[0].length + 6);
+        if (/(worth|save|saving|up to)\W*$/i.test(before) || /^\s*off\b/i.test(after)) continue;
+        amounts.push(parseFloat(m[1].replace(/,/g, '')));
+      }
+    });
+    const v = amounts.filter(x => x > 0);
+    if (v.length) out.push({i, href: a.href, price: Math.min(...v)});
+  });
+  const seen = new Set();
+  return out.sort((x, y) => x.price - y.price).filter(x => !seen.has(x.href) && seen.add(x.href));
+}"""
 # The value GTM holds for every top-level dataLayer key at the end of a step (what a Data Layer
 # Variable would read), so value breaks can name the variable. Objects are written the way Tag
 # Assistant shows them (item_id: "123"), which the report's item comparison reads.
@@ -43,10 +76,12 @@ DL_VALUES_JS = """() => {
   const g = window.google_tag_manager || {};
   const id = Object.keys(g).find(k => /^GTM-/.test(k) && g[k] && g[k].dataLayer);
   if (!id) return {};
-  const keys = new Set();
-  (window.dataLayer || []).forEach(e => {
+  const keys = new Set(), src = {};
+  // src: the last dataLayer push that set each key (its event name, or none), and how many pushes set it
+  (window.dataLayer || []).forEach((e, i) => {
     if (!e || typeof e !== 'object' || Array.isArray(e) || '0' in e) return;
-    Object.keys(e).forEach(k => { const t = k.split('.')[0]; if (!/^(gtm|event|eventCallback|eventTimeout)$/.test(t)) keys.add(t); });
+    Object.keys(e).forEach(k => { const t = k.split('.')[0]; if (/^(gtm|event|eventCallback|eventTimeout)$/.test(t)) return;
+      keys.add(t); src[t] = {event: typeof e.event === 'string' ? e.event : '', push: i + 1, pushes: ((src[t] || {}).pushes || 0) + 1}; });
   });
   const out = {};
   keys.forEach(k => {
@@ -57,7 +92,7 @@ DL_VALUES_JS = """() => {
       out[k] = s.length > 2000 ? s.slice(0, 2000) : s;
     } catch (e) {}
   });
-  return out;
+  return {values: out, sources: Object.fromEntries(Object.keys(out).map(k => [k, src[k]]))};
 }"""
 
 
@@ -126,6 +161,15 @@ HIDE_TA_BADGE = """(() => { if (window.top !== window) return;
   setInterval(hide, 300); document.addEventListener('DOMContentLoaded', hide); })()"""
 
 
+def with_site_url(link, site):
+    """Tag Assistant opens the site only when its link says which one (url=...). A Share link of a
+    published version often has none, which leaves the Connect button disabled: add the homepage."""
+    if re.search(r"[#?&]url=", link) or "#" not in link:
+        return link
+    head, frag = link.split("#", 1)
+    return head + "#/?url=" + quote(site.rstrip("/") + "/", safe="") + "&" + re.sub(r"^/?\??", "", frag)
+
+
 def parse_preview(link):
     """Container ID, gtm_auth and gtm_preview from a GTM Share preview link."""
     txt = link
@@ -183,6 +227,8 @@ class Journey:
         self.brand, self.recipe, self.check, self.journey, self.log = brand, recipe, check, journey, log
         self.base = brand["url"].rstrip("/")
         self.product_url = product_url
+        self.purchase = bool(release.yes_no(brand.get("purchase")))
+        self.product_choice = brand.get("product_choice", "cheapest")
         self.current = "Before consent"
         self.urls = {}
         self.previews = {}
@@ -311,6 +357,8 @@ class Journey:
                     info["note"] = "The agreed product wasn't on the category page, so its URL was opened directly"
                     return "Opened " + self.product_url + " directly"
                 i = same[0]
+            elif self.product_choice == "cheapest":
+                return self.open_cheapest(sel, part, info)
             else:
                 i = vis[min(int(self.recipe.get("product_index", 0)), len(vis) - 1)]   # the same tile in every check
             el = loc.nth(i)
@@ -328,6 +376,76 @@ class Journey:
                 p.wait_for_timeout(part.get("ms", 2000))
             return "Waited"
         raise ValueError("Unknown action in the recipe: " + a)
+
+    def add_selector(self):
+        for e in self.recipe["journey"]:
+            key = (e.get("step") or e.get("name") or "").strip().lower().replace(" ", "_")
+            if STD_NAMES.get(key) == "Add to basket" and e.get("action", "click") == "click" and e.get("selector"):
+                return e["selector"]
+        return None
+
+    def open_cheapest(self, sel, part, info, tries=6):
+        """Open the lowest-priced product on the category page that can be added to the basket.
+        A product whose Add to basket button is missing or disabled (out of stock, or a variant to
+        choose first) is skipped for the next cheapest."""
+        p = self.page
+        category = p.url
+        tiles = p.evaluate(CHEAPEST_JS, [sel, self.recipe.get("price_selector")])
+        if not tiles:
+            raise RuntimeError("No product prices found on the category page for " + sel +
+                               ". Add \"price_selector\" to the recipe, or set product = \"first\" in the release file")
+        add = self.add_selector()
+        skipped = []
+        for t in tiles[:tries]:
+            if p.url != category:
+                p.goto(category, wait_until="domcontentloaded", timeout=45000)
+                p.wait_for_timeout(2000)
+            el = p.locator(sel).nth(t["i"])
+            try:
+                el.scroll_into_view_if_needed(timeout=5000)
+                el.click(timeout=part.get("timeout", 15000))
+                p.wait_for_load_state("domcontentloaded", timeout=30000)
+                if add:
+                    btn = p.locator(add).first
+                    btn.wait_for(state="visible", timeout=10000)
+                    if not btn.is_enabled():
+                        raise RuntimeError("Add to basket disabled")
+            except Exception:
+                skipped.append(urlparse(t["href"]).path)
+                continue
+            if skipped:
+                info["note"] = (f"Cheapest product that can be added to the basket. Skipped {len(skipped)} cheaper one(s) "
+                                f"that couldn't be added: {', '.join(skipped)}")
+            return f"Clicked the cheapest product tile ({urlparse(t['href']).path}, {t['price']:.2f}) on the category page"
+        raise RuntimeError(f"None of the {len(skipped)} cheapest products could be added to the basket: {', '.join(skipped)}")
+
+    def wait_for_enter(self):
+        """Wait for Enter in the terminal while the browser keeps working (the preview routing and
+        request recording need the Playwright connection running). Returns what was typed."""
+        while True:
+            try:
+                self.page.wait_for_timeout(500)
+            except Exception:
+                return "s"   # the window was closed
+            if select.select([sys.stdin], [], [], 0)[0]:
+                line = sys.stdin.readline()
+                return line.strip().lower() if line else "s"   # end of input: nobody to place the order
+
+    def manual_purchase(self, out_dir, n):
+        """The tester places the order; everything sent until they press Enter is the Purchase step."""
+        self.current = "Purchase"
+        try:
+            self.page.evaluate("() => window.QA && QA.mark()")
+            self.page.bring_to_front()
+        except Exception:
+            pass
+        self.log(f"    → Purchase ({self.check} check, {self.journey}): place the order in the browser window.\n"
+                 "      When the order confirmation page shows, press Enter here. To skip the purchase, type s and press Enter.")
+        if self.wait_for_enter() == "s":
+            return self.save("Purchase", "manual", [], "partial", "Purchase skipped by the tester", out_dir, n)
+        self.settle()
+        return self.save("Purchase", "manual", ["Order placed by the tester; confirmation page " + self.page.url.split("?")[0]],
+                         "ok", "", out_dir, n)
 
     def save(self, name, via, actions, status, error, out_dir, n):
         rec = {"name": name, "status": status, "via": via, "actions": actions, "wait_s": WAIT_S}
@@ -357,7 +475,8 @@ class Journey:
                 rec["tags"] = []
                 self.ta_note = "Tag Assistant stopped answering at " + name + ": " + str(e).splitlines()[0][:120]
         try:
-            rec["variables"] = self.page.evaluate(DL_VALUES_JS)
+            dl = self.page.evaluate(DL_VALUES_JS) or {}
+            rec["variables"], rec["variable_sources"] = dl.get("values", {}), dl.get("sources", {})
         except Exception:
             rec["variables"] = {}
         named = sorted({h["vendor"] for h in rec.get("hits") or [] if not str(h["vendor"]).startswith("Unrecognised")})
@@ -440,6 +559,9 @@ class Journey:
                 err = type(e).__name__ + ": " + str(e).splitlines()[0][:200]
                 steps.append(self.save(name, via or "direct", actions, "failed", err, out_dir, n))
                 break   # later steps would start from the wrong page
+        if self.purchase and steps and steps[-1]["status"] == "ok":
+            n += 1
+            steps.append(self.manual_purchase(out_dir, n))
         return steps
 
     def close(self):
@@ -457,6 +579,15 @@ def run_check(name, check, headed=False, only=None, log=print, no_preview=False,
     if no_preview:
         for b in brands:
             b["preview_links"] = []
+    for b in brands:
+        b["product_choice"] = rel["product"]
+    buyers = [b["site"] for b in brands if release.yes_no(b.get("purchase"))]
+    if buyers:
+        if not sys.stdin.isatty():
+            raise ValueError("purchase = \"yes\" needs you at the terminal to say when each order is placed: run gtm-qa from a terminal")
+        log(f"Purchase: you'll place {len(rel['journeys'])} order(s) per brand in this check ({', '.join(buyers)}). "
+            "The browser window opens so you can pay.")
+        headed = True
     out = {}
     with sync_playwright() as pw:
         browser = pw.chromium.launch(headless=not headed)
@@ -470,15 +601,16 @@ def run_check(name, check, headed=False, only=None, log=print, no_preview=False,
             started = datetime.now().isoformat(timespec="seconds")
             results = {"meta": {}, "steps": [], "optout": {"steps": []}}
             applied, loaded, ta_used, ta_notes = set(), set(), False, []
-            if not no_ta and b["preview_links"] and not b.get("live_links"):
+            ta_prev, ta_live = b.get("ta_links") or ("", "")
+            if not no_ta and b["preview_links"] and not ta_live:
                 ta_notes.append("Tag Assistant not used: it runs only when the brand has a live-version Share link too, "
                                 "because its debug mode changes how some tags behave and both checks must run the same way")
-                log("  Tag Assistant skipped: add a live-version Share link (live_links) to record tags in both checks")
+                log("  Tag Assistant skipped: add storefront_live_link to record tags in both checks")
             for j in rel["journeys"]:
                 log(f"  {j} journey (fresh visitor, {'Accept all' if j == 'opt-in' else 'Reject all'})")
                 # Tag Assistant's debug mode changes how some tags behave, so it runs in both checks or in neither
-                ta_link = "" if no_ta or not (b["preview_links"] and b.get("live_links")) else \
-                    (b["preview_links"][0] if check == "preview" else b["live_links"][0])
+                ta_link = "" if no_ta or not (ta_prev and ta_live) else \
+                    with_site_url(ta_prev if check == "preview" else ta_live, b["url"])
                 jr = Journey(browser, b, recipe, check, j, product, log, ta_link)
                 try:
                     steps = jr.run(out_dir)

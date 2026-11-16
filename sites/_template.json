@@ -14,8 +14,8 @@
   ],
   "_gtm_loader_help": "Where the site loads GTM from. Keep the default unless GTM is served from your own domain (server-side GTM / custom loader) - then add that path, e.g. \"metrics\\\\.mysite\\\\.com/gtm\\\\.js\".",
   "product_index": 0,
-  "_product_help": "Which product tile on the category page to click (0 = the first). The first check's product is reused by later checks.",
-  "_journey_help": "After Home: Category opens a URL, Product clicks a tile (click_random picks the agreed product), Add to basket clicks on the product page, Basket opens a URL, Checkout clicks. Extra entries with \"step\": \"Checkout\" become part of that step. Purchase steps are never run.",
+  "_product_help": "By default the cheapest product on the category page that can be added to the basket is tested (release file: product = \"cheapest\"). product_index is the tile used with product = \"first\" (0 = the first). price_selector (optional) is the CSS selector of the price inside a tile, if prices aren't found. The first check's product is reused by later checks.",
+  "_journey_help": "After Home: Category opens a URL, Product clicks a tile (click_random picks the agreed product), Add to basket clicks on the product page, Basket opens a URL, Checkout clicks. Extra entries with \"step\": \"Checkout\" become part of that step. Don't add a Purchase step: with purchase = \"yes\" in the release file the tester places the order by hand after Checkout.",
   "journey": [
     {
       "name": "Category",

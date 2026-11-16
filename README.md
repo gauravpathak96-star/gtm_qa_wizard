@@ -22,9 +22,10 @@ gtm-qa report <release>            compare the two and open report.html
 
 1. **Before consent:** the homepage, with the banner left alone.
 2. **Home:** the consent click.
-3. **Category, Product, Add to basket, Basket, Checkout.** The product tile is clicked on the category page, not opened by URL.
+3. **Category, Product, Add to basket, Basket, Checkout.** The product tile is clicked on the category page, not opened by URL. By default it's the **cheapest product on the category page** that can be added to the basket: a cheaper one that's out of stock or needs a variant chosen first is skipped. Set `product = "first"` in the release file to use the recipe's `product_index` tile instead. Live and Preview always test the same product.
+4. **Purchase**, only when the release file says `purchase = "yes"`. The browser window opens and the run stops after Checkout. You place the order yourself, then press Enter in the terminal once the confirmation page shows (type `s` and Enter to skip it). That's one real order per journey per check: 4 with both journeys. With `purchase = "no"` (the default) no order is placed.
 
-There's a fixed 8-second wait after each step. No order is ever placed.
+There's a fixed 8-second wait after each step.
 
 **What it records at every step:**
 
@@ -69,7 +70,12 @@ uv run gtm-qa check-setup
    ```
 2. Open `releases/thg-consent-fix.toml` and fill it in:
    - your name;
-   - for each brand, the GTM Share preview link (GTM › Preview › Tag Assistant › ⋮ › Share). Every brand has its own container, so each needs its own link.
+   - for each brand, its GTM Share links. Every brand has its own containers, so each needs its own links:
+     - `storefront_preview_link`: the workspace (GTM › Preview › Tag Assistant › ⋮ › Share). If the site uses one container for the whole site, this is the only one you need.
+     - `storefront_live_link`: the published live version (GTM › Versions › the live version › Preview › Share). Optional: it lets Tag Assistant record which tags fired.
+     - `checkout_preview_link` and `checkout_live_link`: only when checkout uses a separate container. Leave them empty otherwise.
+
+   Each field has a `# =====` header saying what goes in it. Older release files with `preview_links` / `live_links` still work.
 3. Check it, then run both checks and the report:
    ```
    uv run gtm-qa check thg-consent-fix
@@ -114,7 +120,8 @@ Release files and results stay on your computer. They're git-ignored because pre
 - `url`: the homepage;
 - the cookie banner's Accept and Reject buttons;
 - `journey`: the category page, the product tile selector, and the Add to basket and Checkout buttons;
-- optionally, `product_index`, to use a different tile than the first;
+- optionally, `product_index`, the tile to use when the release says `product = "first"`;
+- optionally, `price_selector`, the CSS selector of the price inside a product tile, if the cheapest pick can't find prices;
 - `noise_events`: events a noise test showed differ between identical runs (see above).
 
 When a site changes and a step fails, the screenshots show where it stopped. Fix the recipe, then run both checks again with the fixed recipe. `sites/_template.json` shows every field.
@@ -135,7 +142,7 @@ Recipes so far: myprotein, lookfantastic, christophe-robin, myvitamins, cult-bea
 
 For MYP_NC, for example: "Pinterest - Search → Pinterest - Pixel - Search. Trigger was: Custom event view_item_list. Trigger now: elysiumEvent on /search/ only". It's labelled "likely" because it's matched from the exports, not seen firing.
 
-**Tags fired:** when a brand has both a workspace Share link (`preview_links`) and a Share link of the published live version (`live_links`), each journey connects Tag Assistant in the tool's own browser. No sign-in or remote debugging is needed.
+**Tags fired:** when a brand has both a workspace Share link (`storefront_preview_link`) and a Share link of the published live version (`storefront_live_link`), each journey connects Tag Assistant in the tool's own browser. It follows one container per run: the storefront's, or the checkout's when only the checkout has both links. If a live link has no site URL in it, the tool adds the homepage so Tag Assistant can connect. No sign-in or remote debugging is needed.
 
 - **Page steps** record the tags fired on that page.
 - **In-page steps** (the consent click, Add to basket, the Checkout click) record only the tags that action added.
