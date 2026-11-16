@@ -1,0 +1,51 @@
+{
+  "_help": "Myprotein UK recipe (THG platform). Browsing only, never an order. Built 2026-11-16 from a probe of the live site.",
+  "site_name": "Myprotein UK",
+  "url": "https://www.myprotein.com",
+  "gtm_loader_patterns": [
+    "googletagmanager\\.com/gtm\\.js"
+  ],
+  "cookie_banner_accept": [
+    "#onetrust-accept-btn-handler"
+  ],
+  "cookie_banner_reject": [
+    "#onetrust-reject-all-handler"
+  ],
+  "product_index": 0,
+  "noise_events": [],
+  "journey": [
+    {
+      "name": "Category",
+      "action": "goto",
+      "url": "{base_url}/c/nutrition/protein/"
+    },
+    {
+      "name": "Product",
+      "action": "click_random",
+      "selector": "a.product-item[href*='/p/']"
+    },
+    {
+      "name": "Add to basket",
+      "action": "click",
+      "selector": "#add-to-basket"
+    },
+    {
+      "name": "Basket",
+      "action": "goto",
+      "url": "{base_url}/basket/"
+    },
+    {
+      "name": "Checkout",
+      "action": "click",
+      "selector": "#desktop-checkout-start"
+    },
+    {
+      "name": "free_gift_popup",
+      "step": "Checkout",
+      "action": "click",
+      "selector": "button:has-text('Continue to checkout')",
+      "optional": true,
+      "timeout": 5000
+    }
+  ]
+}

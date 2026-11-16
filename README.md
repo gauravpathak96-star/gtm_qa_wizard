@@ -119,7 +119,7 @@ Release files and results stay on your computer. They're git-ignored because pre
 
 When a site changes and a step fails, the screenshots show where it stopped. Fix the recipe, then run both checks again with the fixed recipe. `sites/_template.json` shows every field.
 
-Recipes so far: lookfantastic.
+Recipes so far: myprotein, lookfantastic, christophe-robin, myvitamins, cult-beauty, mankind.
 
 ## What the report can and can't see
 
@@ -159,7 +159,7 @@ This checks that the report reproduces the MYP_NC release: 3 failed of 123 check
 | 1 | Project, install, `gtm-qa` command, release files | Done |
 | 2 | Runner: both journeys, fresh visitor, preview loading, progress output, several brands per release | Done |
 | 3 | Report: comparison and export matching, checked against MYP_NC and a LookFantastic noise test | Done |
-| 4 | Recipes for MyProtein, Christophe Robin, Myvitamins, Cult Beauty and Mankind | Next |
+| 4 | Recipes for MyProtein, Christophe Robin, Myvitamins, Cult Beauty and Mankind | Done |
 | 5 | A teammate installs and runs it from this README alone | To do |
 
 Later: reading Tag Assistant from your own Chrome, and Claude-assisted recipe repair.

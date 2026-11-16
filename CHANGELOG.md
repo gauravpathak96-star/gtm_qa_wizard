@@ -2,6 +2,16 @@
 
 Every change adds an entry here, newest first.
 
+## 2026-11-16 · Recipes for MyProtein, Christophe Robin, Myvitamins, Cult Beauty and Mankind
+
+- **New recipes:** `sites/myprotein.json`, `christophe-robin.json`, `myvitamins.json`, `cult-beauty.json` and `mankind.json`. All are THG sites:
+  - OneTrust banner (Reject all via Cookie settings);
+  - product tiles `a.product-item`, Add to basket `#add-to-basket`, basket `/basket/`.
+  - Checkout is `#summary-checkout-btn` on Christophe Robin, Cult Beauty and Mankind, and `#desktop-checkout-start` on MyProtein and Myvitamins.
+  - The category pages are chosen so the first product can be added without choosing a variant.
+- **Optional journey entries:** a recipe entry with `"optional": true` is skipped when it can't be done. MyProtein and Myvitamins use one for the free-gift pop-up that can appear after Checkout ("Continue to checkout").
+- **Tested:** a live check on all 5 brands completed both journeys, every step.
+
 ## 2026-11-16 · Tag Assistant in the run
 
 - **Tag Assistant runs in the tool's own browser.** Each journey opens the brand's Share link in Tag Assistant, clicks Connect and runs the journey in the tab it opens, in debug mode. Tag Assistant needs no sign-in, and there's no remote debugging of your Chrome.

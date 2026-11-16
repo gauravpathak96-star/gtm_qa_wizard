@@ -419,7 +419,12 @@ class Journey:
                     act = part.get("action", "goto")
                     if act != "goto":
                         self.page.evaluate("() => window.QA && QA.mark()")
-                    actions.append(self.do(part, info))
+                    try:
+                        actions.append(self.do(part, info))
+                    except Exception:
+                        if not part.get("optional"):
+                            raise
+                        continue   # an optional click (e.g. a pop-up that doesn't always show)
                     via = via or info.get("via") or VIA_OF_ACTION.get(act, "action")
                 # a click that stays on the same page (Add to basket) is an in-page action
                 if via == "click" and self.page.url.split("?")[0] == before:

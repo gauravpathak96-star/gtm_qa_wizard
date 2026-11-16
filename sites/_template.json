@@ -59,5 +59,6 @@
     }
   ],
   "_noise_help": "Events a noise test showed differ between two identical runs (\"Vendor:event\"). Left out of every report for this site and listed under Not compared.",
-  "noise_events": []
+  "noise_events": [],
+  "_optional_help": "A journey entry with \"optional\": true is skipped when it can't be done, e.g. a pop-up that doesn't always show."
 }
