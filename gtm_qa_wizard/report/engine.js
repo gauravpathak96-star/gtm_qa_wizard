@@ -1,7 +1,8 @@
 /* Comparison engine of gtm-qa-wizard.
  * Copied unchanged from the GTM Journey Tester page (artifact/gtm-journey-tester.html in gtm-tester,
  * report standard v3, 2026-11-13), where it was checked against the MYP_NC release: 3 failed of 123.
- * Only the S state object, diagnoses() and parsePreview() are new: they stand in for the page around it. */
+ * Only the S state object, diagnoses() and parsePreview() are new: they stand in for the page around it.
+ * Changed since (see CHANGELOG): rule 4 compares every call of an event, not only the first. */
 "use strict";
 const S={naming:null,nmIdx:null,tmap:null,rel:{cfg:{previews:[]}},phases:{}};
 function diagnoses(){return[];}
@@ -270,7 +271,7 @@ function rgCheck(cmp){
           const t=rs.name+' not compared: different container'+(other?' ('+other+')':'');if(!notes.includes(t))notes.push(t);return;}
         const strict=sk==='optout'||CONSENT_STEP(rs.key);
         const calls=s=>{const m={};s.hits.forEach(h=>{if(/^Unrecognised/i.test(h.vendor)||NON_GTM.test(h.vendor)||NOT_COMPARED.test(h.vendor))return;
-          const e=m[h.vendor]||(m[h.vendor]={named:{},un:0,all:0});if(urlish(h.ev))e.un+=h.n;else if(!BEHAVIOUR.test(h.ev)){const x=e.named[h.ev]||(e.named[h.ev]={n:0,params:h.params});x.n+=h.n;}else return;e.all+=h.n;});return m;};
+          const e=m[h.vendor]||(m[h.vendor]={named:{},un:0,all:0});if(urlish(h.ev))e.un+=h.n;else if(!BEHAVIOUR.test(h.ev)){const x=e.named[h.ev]||(e.named[h.ev]={n:0,params:h.params,all:[]});x.n+=h.n;x.all.push(h.params||{});}else return;e.all+=h.n;});return m;};
         const HR=calls(rs),HC=calls(cs),E={named:{},un:0,all:0};
         const TR=ta?tags(rs,rid):[],TC=ta?tags(cs,cid):[];const firedC=TC.filter(t=>!t.fail);
         new Set([...Object.keys(HR),...Object.keys(HC),...TR.map(t=>t.v),...TC.map(t=>t.v)].filter(Boolean)).forEach(v=>{
@@ -295,14 +296,19 @@ function rgCheck(cmp){
               if(partial(cs)){cov.add(scen+' · '+rs.name+' was only partly captured in '+cName);return;}
               add(1,e+' not sent in '+cName+' (×'+r.named[e].n+' on '+rName+')',{ev:e});});
             if(r.all&&!c.all&&!iss.some(i=>i.rule===1)){if(partial(cs))cov.add(scen+' · '+rs.name+' was only partly captured in '+cName);else add(1,'no '+v+' calls in '+cName+' (×'+r.all+' on '+rName+')',{none:true});}
-            // 4 key values
-            Object.keys(r.named).forEach(e=>{const y=c.named[e];if(!y||/promotion/i.test(e))return;const a=r.named[e].params||{},b=y.params||{};
-              Object.keys(a).forEach(k=>{const A=vNorm(a[k]),B=b[k]==null?'':vNorm(b[k]);if(A===B||emptyV(A)||BAD_VALUE.test(A))return;
-                if(CALL_ORDER.test(k)){if(emptyV(B))add(4,e+': '+k+' lost (was '+A.slice(0,60)+')',{ev:e});return;}
+            // 4 key values. A step can send several calls with the same event (one per account), in any
+            // order, so a value only counts as changed when it's in none of Preview's calls of that event.
+            Object.keys(r.named).forEach(e=>{const y=c.named[e];if(!y||/promotion/i.test(e))return;
+              const vals=(x,k)=>new Set((x.all||[x.params||{}]).map(p=>p[k]).filter(v=>v!=null).map(v=>vNorm(v)));
+              const keys=new Set((r.named[e].all||[r.named[e].params||{}]).flatMap(p=>Object.keys(p)));
+              keys.forEach(k=>{const A=[...vals(r.named[e],k)].filter(v=>!emptyV(v)&&!BAD_VALUE.test(v)),B=vals(y,k);if(!A.length)return;
+                const miss=A.filter(v=>!B.has(v));if(!miss.length)return;
+                if(CALL_ORDER.test(k)){if(![...B].some(v=>!emptyV(v)))add(4,e+': '+k+' lost (was '+miss[0].slice(0,60)+')',{ev:e});return;}
                 if(!CALL_KEY.test(k))return;
-                if(/^pr\d+$/.test(k)){if(b[k]==null)add(4,e+': '+k+' (item) missing',{ev:e});else itemsDiff(itemsOfPr(A),itemsOfPr(B)).forEach(x=>add(4,e+': '+x,{ev:e}));return;}
-                add(4,e+': '+k+(b[k]==null?' missing (was '+A.slice(0,60)+')':' '+A.slice(0,60)+' → '+B.slice(0,60)),{ev:e});});
-              Object.keys(b).forEach(k=>{if(BAD_VALUE.test(String(b[k]))&&!BAD_VALUE.test(String(a[k]==null?'':a[k])))add(4,e+': '+k+' = '+b[k],{ev:e});});});
+                if(/^pr\d+$/.test(k)){if(!B.size)add(4,e+': '+k+' (item) missing',{ev:e});else if(A.length===1&&B.size===1)itemsDiff(itemsOfPr(A[0]),itemsOfPr([...B][0])).forEach(z=>add(4,e+': '+z,{ev:e}));return;}
+                add(4,e+': '+k+(!B.size?' missing (was '+miss[0].slice(0,60)+')':' '+miss.join(', ').slice(0,60)+' → '+[...B].filter(v=>!A.includes(v)).join(', ').slice(0,60)),{ev:e});});
+              const bad=new Set((r.named[e].all||[]).flatMap(p=>Object.keys(p).filter(k=>BAD_VALUE.test(String(p[k])))));
+              (y.all||[y.params||{}]).forEach(p=>Object.keys(p).forEach(k=>{if(BAD_VALUE.test(String(p[k]))&&!bad.has(k))add(4,e+': '+k+' = '+p[k],{ev:e});}));});
             // 3 consent: before the choice and after Reject all nothing new may be sent or fired
             if(strict&&!NECESSARY_V.test(v)){
               Object.keys(c.named).forEach(e=>{if(r.named[e]||/^G100$/.test(String((c.named[e].params||{}).gcs||'')))return;

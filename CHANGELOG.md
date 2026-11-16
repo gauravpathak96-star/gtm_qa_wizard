@@ -2,6 +2,12 @@
 
 Every change adds an entry here, newest first.
 
+## 2026-11-16 · One entry per account, key values compared across every call
+
+- `capture/qa-capture.js`: calls are grouped per account too (`tid`, `id`). Cult Beauty sends a Google Ads `page_view` to two accounts (AW-350752883 and AW-701660261) at every step. Before, both were merged into one entry that kept whichever call came first, so the report showed accounts "changing" between checks. Results captured before this need a re-run to benefit.
+- Report rule 4 (key value broken) compares every call of an event, not only the first. A value fails only when it's in none of Preview's calls of that event.
+- Re-run of the thg-consent-template-fix release on all 6 brands, both checks, every step completed. The false Google Ads account failures are gone. MYP_NC still gives 3 failed of 123, and the LookFantastic noise test 0 of 142.
+
 ## 2026-11-16 · Recipes for MyProtein, Christophe Robin, Myvitamins, Cult Beauty and Mankind
 
 - **New recipes:** `sites/myprotein.json`, `christophe-robin.json`, `myvitamins.json`, `cult-beauty.json` and `mankind.json`. All are THG sites:

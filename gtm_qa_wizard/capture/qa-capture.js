@@ -24,6 +24,8 @@
  * changes show. Pinterest /v3, TikTok and Meta calls whose event is only in the request body are
  * recorded as "(event in body, not readable)" instead of looking like a missing event; Playwright
  * runs pass the bodies to QA.step, so there the event is read. wait_s is measured from QA.boost().
+ * 2026-11-16: calls are grouped per account too (tid, id), so two Google Ads accounts sending the same
+ * event stay separate instead of one account's values hiding the other's.
  */
 (function () {
   var VENDORS = [
@@ -86,7 +88,8 @@
     });
     var m = {};
     out.forEach(function (h) {
-      var k = h.vendor + '|' + h.event + '|' + JSON.stringify(Object.keys(h.params).sort());
+      // one entry per account: calls to two Google Ads accounts (tid) or two pixels (id) are never merged
+      var k = h.vendor + '|' + h.event + '|' + (h.params.tid || '') + '|' + (h.params.id || '') + '|' + JSON.stringify(Object.keys(h.params).sort());
       if (!m[k]) m[k] = { vendor: h.vendor, event: h.event, count: 0, params: h.params };
       m[k].count++;
     });
