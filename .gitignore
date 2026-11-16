@@ -1,0 +1,18 @@
+# Run results hold client screenshots, network data and cookies
+runs/
+
+# Release files hold GTM preview links (gtm_auth gives preview access); only the example is shared
+releases/*.toml
+!releases/example.toml
+
+# Test data taken from real releases (client data)
+tests/fixtures/
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+
+# macOS
+.DS_Store

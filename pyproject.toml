@@ -1,0 +1,19 @@
+[project]
+name = "gtm-qa-wizard"
+version = "0.1.0"
+description = "Regression tests for GTM releases: the same scripted journey on Live and Preview, compared step by step"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "playwright>=1.48",
+]
+
+[project.scripts]
+gtm-qa = "gtm_qa_wizard.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["gtm_qa_wizard"]

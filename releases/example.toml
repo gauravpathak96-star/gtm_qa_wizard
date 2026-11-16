@@ -1,0 +1,33 @@
+# Example release file. Copy it with:  uv run gtm-qa new <release> --site <site> --url <homepage>
+# Real release files stay on your computer (git-ignored): preview links give access to your workspace.
+
+name = "example"
+
+# Site recipe in sites/<site>.json (how to click through the site)
+site = "lookfantastic"
+
+# Homepage of the site being tested
+url = "https://www.lookfantastic.com"
+
+# Your name, for the report
+tester = "Example tester"
+
+# GTM › Preview › Tag Assistant › ⋮ › Share, one link per changed container.
+# Needed for the preview check only.
+preview_links = ["https://tagassistant.google.com/#/?id=GTM-XXXXXXX&gtm_auth=EXAMPLE&gtm_preview=env-5"]
+
+# Journeys to run in every check: opt-in (Accept all) and opt-out (Reject all)
+journeys = ["opt-in", "opt-out"]
+
+# Optional: a product URL to test. Left empty, the first check picks one from the
+# category page and every later check reuses it.
+product_url = ""
+
+# What this release changes, in a sentence (shown in the report)
+note = "Example: renamed Meta tags to the new naming convention"
+
+# Optional: GTM container exports, so renamed and re-created tags are paired.
+# Admin › Export Container: the live version (before) and the workspace (after).
+[exports]
+before = ""
+after = ""

@@ -1,0 +1,56 @@
+{
+  "_help": "LOOKFANTASTIC UK recipe. Used to develop and test gtm-qa-wizard (browsing only, no order). The runner opens url from the release file.",
+  "site_name": "LOOKFANTASTIC UK",
+  "gtm_loader_patterns": [
+    "googletagmanager\\.com/gtm\\.js"
+  ],
+  "cookie_banner_accept": [
+    "#onetrust-accept-btn-handler",
+    "button:has-text('Accept All Cookies')"
+  ],
+  "wait_s": 8,
+  "full_page_screenshots": false,
+  "cookies": [
+    "_ga",
+    "_fbp",
+    "_fbc",
+    "_gcl_au",
+    "OptanonConsent"
+  ],
+  "journey": [
+    {
+      "name": "Home",
+      "action": "goto",
+      "url": "{base_url}/"
+    },
+    {
+      "name": "Category",
+      "action": "goto",
+      "url": "{base_url}/c/health-beauty/face/"
+    },
+    {
+      "name": "Product",
+      "action": "click_random",
+      "selector": "a[data-astro-prefetch='viewport'][href*='/p/']"
+    },
+    {
+      "name": "Add to basket",
+      "action": "click",
+      "selector": "#add-to-basket"
+    },
+    {
+      "name": "Basket",
+      "action": "goto",
+      "url": "{base_url}/basket/"
+    },
+    {
+      "name": "Checkout",
+      "action": "click",
+      "selector": "#summary-checkout-btn"
+    }
+  ],
+  "cookie_banner_reject": [
+    "#onetrust-reject-all-handler",
+    "button:has-text('Reject All')"
+  ]
+}
