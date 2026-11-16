@@ -1,0 +1,61 @@
+{
+  "_help": "Copy to sites/<site>.json. Keys starting with _ are notes. Every check follows the journey exactly, so keep it to the standard steps.",
+  "site_name": "Brand name",
+  "url": "https://www.example-brand.com",
+  "_banner_help": "Before consent and Home are added by the runner. Accept/Reject: CSS selectors of the cookie banner buttons. OneTrust's are tried anyway, and Cookie settings › Reject All when there's no Reject button.",
+  "cookie_banner_accept": [
+    "#onetrust-accept-btn-handler"
+  ],
+  "cookie_banner_reject": [
+    "#onetrust-reject-all-handler"
+  ],
+  "gtm_loader_patterns": [
+    "googletagmanager\\.com/gtm\\.js"
+  ],
+  "_gtm_loader_help": "Where the site loads GTM from. Keep the default unless GTM is served from your own domain (server-side GTM / custom loader) - then add that path, e.g. \"metrics\\\\.mysite\\\\.com/gtm\\\\.js\".",
+  "product_index": 0,
+  "_product_help": "Which product tile on the category page to click (0 = the first). The first check's product is reused by later checks.",
+  "_journey_help": "After Home: Category opens a URL, Product clicks a tile (click_random picks the agreed product), Add to basket clicks on the product page, Basket opens a URL, Checkout clicks. Extra entries with \"step\": \"Checkout\" become part of that step. Purchase steps are never run.",
+  "journey": [
+    {
+      "name": "Category",
+      "action": "goto",
+      "url": "{base_url}/skincare.list"
+    },
+    {
+      "name": "Product",
+      "action": "click_random",
+      "selector": "a.productBlock_link"
+    },
+    {
+      "name": "Add to basket",
+      "action": "click",
+      "selector": "button:has-text('Add to basket')",
+      "then_wait_for": "text=View basket"
+    },
+    {
+      "name": "Basket",
+      "action": "goto",
+      "url": "{base_url}/my.basket"
+    },
+    {
+      "name": "Checkout",
+      "action": "click",
+      "selector": "a:has-text('Checkout securely')"
+    },
+    {
+      "name": "guest_email",
+      "step": "Checkout",
+      "action": "fill",
+      "fields": {
+        "input[type=email]": "qa+gtm@yourcompany.com"
+      }
+    },
+    {
+      "name": "continue",
+      "step": "Checkout",
+      "action": "click",
+      "selector": "button:has-text('Continue')"
+    }
+  ]
+}

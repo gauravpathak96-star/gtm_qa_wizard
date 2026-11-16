@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>__TITLE__</title>
+<style>
+:root{--bg:#f4f6f8;--surface:#fff;--sunken:#f6f8f9;--ink:#132029;--muted:#586a76;--line:#d6dee3;--pass:#1d7f48;--pass-soft:#dff3e7;--fail:#c2352b;--fail-soft:#fbe4e1;--warn:#a86a12;--warn-soft:#fbefd9}
+@media (prefers-color-scheme:dark){:root{--bg:#0d141a;--surface:#141e26;--sunken:#101820;--ink:#e2e9ee;--muted:#8fa1ad;--line:#24333e;--pass:#52c584;--pass-soft:#123222;--fail:#f0695e;--fail-soft:#3a1714;--warn:#e5a93e;--warn-soft:#352610}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 -apple-system,"Segoe UI",Helvetica,Arial,sans-serif}
+main{max-width:1240px;margin:0 auto;padding:28px 16px 60px}h1{font-size:22px;margin:0}h2{font-size:18px;margin:36px 0 8px;display:flex;gap:10px;align-items:center}
+.muted{color:var(--muted)}.mono{font-family:Menlo,Consolas,monospace;font-size:12px}.bad{color:var(--fail)}.good{color:var(--pass)}
+#verdict{font-size:18px;font-weight:700;margin:14px 0 6px}.line{margin:0 0 10px}
+section{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:4px 18px 16px;margin-top:20px}
+.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:8px;margin:8px 0}
+table{border-collapse:collapse;width:100%;font-size:13px}th{text-align:left;font-size:11.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);padding:8px 10px;background:var(--sunken);border-bottom:1px solid var(--line)}
+td{padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}tr:last-child td{border-bottom:0}
+.pill{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap}
+.pill.pass{background:var(--pass-soft);color:var(--pass)}.pill.fail{background:var(--fail-soft);color:var(--fail)}.pill.warn{background:var(--warn-soft);color:var(--warn)}.pill.skip,.pill.info{background:var(--sunken);color:var(--muted);border:1px solid var(--line)}
+.why{color:var(--muted);font-size:12px;margin-top:2px}.steplist{margin:4px 0 0;padding-left:16px;font-size:12px}
+details{margin:10px 0}summary{cursor:pointer;font-weight:600}a{color:inherit}
+</style></head><body><main>
+<h1>__TITLE__</h1>
+<p class="muted">__META__</p>
+<div id="verdict"></div>
+<div id="summary"></div>
+<div id="brands"></div>
+<p class="muted" style="margin-top:28px">Each check ran an opt-in (Accept all) and an opt-out (Reject all) journey as a fresh visitor, with the same steps, in a Playwright browser. A row fails only when tracking breaks: a call or event Live sent isn't sent any more, a tag stopped firing with nothing replacing it, consent broke, a key value broke, or an event Live never sends now fires on several pages. Renamed and re-created tags, count differences, heartbeat pings and timing are never failures. Findings come from the calls that reached each vendor.</p>
+</main>
+<script>window.REPORT=__DATA__;</script>
+<script>
+__ENGINE__
+__PAGE__
+</script>
+</body></html>

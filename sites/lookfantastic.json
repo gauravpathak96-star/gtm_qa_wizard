@@ -1,6 +1,7 @@
 {
   "_help": "LOOKFANTASTIC UK recipe. Used to develop and test gtm-qa-wizard (browsing only, no order). The runner opens url from the release file.",
   "site_name": "LOOKFANTASTIC UK",
+  "url": "https://www.lookfantastic.com",
   "gtm_loader_patterns": [
     "googletagmanager\\.com/gtm\\.js"
   ],
