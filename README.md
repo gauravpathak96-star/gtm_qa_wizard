@@ -25,7 +25,16 @@ gtm-qa report <release>            compare the two and open report.html
 3. **Category, Product, Add to basket, Basket, Checkout.** The product tile is clicked on the category page, not opened by URL. By default it's the **cheapest product on the category page** that can be added to the basket: a cheaper one that's out of stock or needs a variant chosen first is skipped. Set `product = "first"` in the release file to use the recipe's `product_index` tile instead. Live and Preview always test the same product.
 4. **Purchase**, only when the release file says `purchase = "yes"`. The browser window opens and the run stops after Checkout. You place the order yourself, then press Enter in the terminal once the confirmation page shows (type `s` and Enter to skip it). That's one real order per journey per check: 4 with both journeys. With `purchase = "no"` (the default) no order is placed.
 
-There's a fixed 8-second wait after each step.
+If the release file has a `guest_checkout_email`, the Checkout step also types it into the site's guest checkout form, declines marketing if the form asks, and clicks Continue as guest (the recipe's `guest_checkout` says where those are). Leave it empty to stop at the checkout start page.
+
+There's a fixed 8-second wait after each step. If a sign-up pop-up covers a tile or button, it's closed and the click is tried again.
+
+**Live only (e.g. after publishing):** run only the live check, then the report:
+```
+uv run gtm-qa run <release> live
+uv run gtm-qa report <release>
+```
+A brand with no preview check gets a live-only section in the same table format, with Live columns only. With nothing to compare against, a row fails when a vendor sends calls before the consent choice or after Reject all (strictly necessary vendors excepted; Google only when its calls say consent was granted), when Tag Assistant shows a failed tag, or when a call carries a broken value (`[object Object]`, `NaN`, `{}`). No preview link is needed; with `storefront_live_link`, Tag Assistant records the tags fired. `gtm-qa report <release> --live-only` reports the live check alone even where a preview check exists.
 
 **What it records at every step:**
 

@@ -62,8 +62,68 @@ function dlSource(raw,scen,stepName,key){
 const srcDiv=t=>t?'<div class="why">'+esc(t)+'</div>':'';
 const varTable=(V,b)=>'<div class="tablewrap"><table><thead><tr><th>Result</th><th>Journey / action</th><th>Variable</th><th>Live</th><th>Preview</th><th>What</th></tr></thead><tbody>'
   +V.map(r=>'<tr><td>'+pill('fail','Failed')+'</td><td>'+esc(r.scen+' · '+r.action.name)+'</td><td class="mono">'+esc(r.tag)+(r.was?'<div class="why">was '+esc(r.was)+'</div>':'')+'</td><td class="mono">'+esc(String(r.live).slice(0,200))+srcDiv(dlSource(b.live,r.scen,r.action.name,r.was||r.tag))+'</td><td class="mono">'+esc(String(r.cur).slice(0,200))+srcDiv(dlSource(b.preview,r.scen,r.action.name,r.tag))+'</td><td>'+esc(r.what)+(r.detail.length?'<div class="why">'+r.detail.map(esc).join('<br>')+'</div>':'')+'</td></tr>').join('')+'</tbody></table></div>';
+// ---- Live only: one check (e.g. after publishing), no comparison. Same table, Live columns only.
+// A row fails when, on its own, the check shows tracking that's wrong:
+//   consent: a vendor sends calls before the consent choice or after Reject all (strictly necessary
+//            vendors excepted; Google calls only when their gcs flag says consent was granted)
+//   tag failed: Tag Assistant shows a tag that failed
+//   key value broken: a call carries [object Object], NaN or {}
+RULE_TXT[6]='Tag failed';
+const GRANTED_GCS=/^G1(1.|.1)$/;
+function auditCheck(N){
+  const rows=[],cov=new Set();
+  SCENS.forEach(([sk,scen])=>{
+    const L=sk==='steps'?N.steps:(N.optout||[]);
+    if(!L.length){cov.add(scen+' journey wasn’t run');return;}
+    if(!L.some(s=>s.tags.length))cov.add(scen+': no Tag Assistant data, so only vendor calls were checked');
+    L.forEach(s=>{
+      const strict=sk==='optout'||CONSENT_STEP(s.key);
+      const m={};s.hits.forEach(h=>{if(/^Unrecognised/i.test(h.vendor)||NON_GTM.test(h.vendor)||NOT_COMPARED.test(h.vendor))return;
+        const e=m[h.vendor]||(m[h.vendor]={named:{},un:0,all:0,params:[]});e.params.push(h.params||{});
+        if(urlish(h.ev))e.un+=h.n;else if(!BEHAVIOUR.test(h.ev)){const x=e.named[h.ev]||(e.named[h.ev]={n:0,params:h.params,all:[]});x.n+=h.n;x.all.push(h.params||{});}else return;e.all+=h.n;});
+      const T=s.tags.map(t=>({name:t.name,fail:t.status==='fail',v:tagVendor(t.name)}));
+      const E={named:{},un:0,all:0,params:[]};
+      new Set([...Object.keys(m),...T.map(t=>t.v)].filter(Boolean)).forEach(v=>{
+        const r=m[v]||E,tr=T.filter(t=>t.v===v),iss=[];const add=(rule,text,o)=>iss.push(Object.assign({rule,text},o||{}));
+        if(s.gaps.some(g=>String(g).toLowerCase()===v.toLowerCase()))cov.add(scen+' · '+s.name+': '+v+' wasn’t captured');
+        if(strict&&r.all&&!NECESSARY_V.test(v)){
+          if(GOOGLE_V.test(v)){const g=r.params.map(p=>String(p.gcs||'')).filter(x=>GRANTED_GCS.test(x));
+            if(g.length)add(3,v+' sent with consent granted ('+g[0]+') '+rgWhen(s.key));}
+          else{const evs=Object.keys(r.named);
+            if(evs.length)evs.forEach(e=>add(3,v+' '+e+' sent '+rgWhen(s.key)+' (×'+r.named[e].n+')',{ev:e}));
+            else add(3,v+' calls sent '+rgWhen(s.key)+' (×'+r.un+')');}}
+        tr.filter(t=>t.fail).forEach(t=>add(6,t.name+' failed (Tag Assistant)'));
+        Object.keys(r.named).forEach(e=>(r.named[e].all||[]).forEach(p=>Object.keys(p).forEach(k=>{
+          if(BAD_VALUE.test(String(p[k]))&&!iss.some(i=>i.rule===4&&i.k===k&&i.ev===e))add(4,e+': '+k+' = '+p[k],{ev:e,k});})));
+        rows.push({scen,step:s.name,stepKey:s.key,vendor:v,strict,st:iss.length?'fail':'pass',iss,r,c:E,tr:tr.map(t=>({name:t.name,fail:t.fail})),tc:[]});
+      });
+    });
+  });
+  const SI={'Opt-in':0,'Opt-out':1};
+  rows.sort((a,b)=>(a.st==='fail'?0:1)-(b.st==='fail'?0:1)||SI[a.scen]-SI[b.scen]||stepIdx(a.stepKey)-stepIdx(b.stepKey)||a.vendor.localeCompare(b.vendor));
+  return{rows,failed:rows.filter(x=>x.st==='fail'),checked:rows.length,cov:[...cov]};
+}
+const auditRow=x=>'<tr><td>'+pill(x.st==='fail'?'fail':'pass',x.st==='fail'?'Failed':'Passed')+'</td>'
+  +'<td style="min-width:200px"><b style="font-weight:500">'+esc(x.scen+' · '+x.step)+'</b><div class="why">'+esc(x.vendor)+'</div>'
+  +(x.st==='fail'?'<ul class="steplist" style="margin-top:4px">'+x.iss.map(i=>'<li>'+esc(RULE_TXT[i.rule]+': '+i.text)+'</li>').join('')+'</ul>':'')+'</td>'
+  +'<td>'+esc(rgTracked(x,'live'))+'</td><td>'+rgTagCell(rgTags(x,'live'))+'</td></tr>';
+const auditTable=L=>'<div class="tablewrap"><table><thead><tr><th>Result</th><th>Journey / action</th><th>Getting tracked? (Live)</th><th>Tag fired (Live)</th></tr></thead><tbody>'+L.map(auditRow).join('')+'</tbody></table></div>';
+function auditSection(b,i){
+  const noise=b.noise_events||[];const [lv,n]=stripNoise(b.live,noise);const N=norm(lv);const A=auditCheck(N);
+  if(n)A.cov.push('Known noise for this site, left out ('+n+' calls): '+noise.join(', '));
+  const nf=A.failed.length,st=nf?'fail':'pass',passed=A.rows.filter(x=>x.st!=='fail');
+  const html='<section id="b'+i+'"><h2>'+esc(b.site)+' '+pill(st,nf?nf+' failed':'Passed')+' '+pill('info','Live only')+'</h2>'
+    +'<p class="line"><b>'+(nf?'Failed':'Passed')+': '+nf+' failed of '+A.checked+' checked</b> · Live only, no comparison</p>'
+    +'<p class="muted">One check of the live container, judged on its own: a row fails when a vendor sends calls before the consent choice or after Reject all (strictly necessary vendors excepted; Google only when its calls say consent was granted), when Tag Assistant shows a failed tag, or when a call carries a broken value ([object Object], NaN, {}).</p>'
+    +(nf?auditTable(A.failed):'<p>Nothing failed.</p>')
+    +'<details><summary>Passed: '+passed.length+'</summary>'+auditTable(passed)+'</details>'
+    +(A.cov.length?det('Not checked: '+A.cov.length,A.cov):'')
+    +'<details><summary>The check</summary>'+checkInfo({live:b.live,preview:null},{N:{benchmark:N,preview:null}}).replace(/<tr><td>Preview<\/td>.*?<\/tr>/,'')+'</details></section>';
+  return{html,out:{site:b.site,status:st,failed:nf,checked:A.checked,notes:[],mode:'live-only',noise_suggest:[]}};
+}
 const out=[];let html='';
 R.brands.forEach((b,i)=>{
+  if(b.live&&(R.live_only||!b.preview)){const a=auditSection(b,i);html+=a.html;out.push(a.out);return;}
   const {G,LS,cmp,V}=brandResult(b);const nf=G.failed.length+V.length;
   const st=!G.pairs.length?'skip':nf?'fail':'pass';
   // what a noise test found: the events to consider adding to the site's noise_events

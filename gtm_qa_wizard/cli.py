@@ -5,7 +5,7 @@
   gtm-qa check <release>                                 check the release file before running
   gtm-qa check-setup                                     check this computer can run the tests
   gtm-qa run <release> live|preview [--only <site>]      run one check on every brand
-  gtm-qa report <release>                                compare live and preview, open report.html
+  gtm-qa report <release> [--live-only]                  compare live and preview (or report live alone), open report.html
 """
 import argparse
 import json
@@ -110,21 +110,27 @@ def cmd_run(a):
     print(f"\nDone: {len(res) - len(bad)} of {len(res)} brand(s) completed every step." +
           (f" Steps didn't complete on: {', '.join(bad)} (see the screenshots in runs/{a.release}/<brand>/{check}/)." if bad else ""))
     other = "preview" if check == "live" else "live"
-    print(f"Next: uv run gtm-qa run {a.release} {other}" if not all((release.RUNS / a.release / s / other / "results.json").exists() for s in res)
-          else f"Next: uv run gtm-qa report {a.release}")
+    if all((release.RUNS / a.release / s / other / "results.json").exists() for s in res):
+        print(f"Next: uv run gtm-qa report {a.release}")
+    elif check == "live":
+        print(f"Next: uv run gtm-qa run {a.release} preview   (to compare with your workspace)\n"
+              f"  or: uv run gtm-qa report {a.release}          (a live-only report, e.g. after publishing)")
+    else:
+        print(f"Next: uv run gtm-qa run {a.release} live")
     return 0
 
 
 def cmd_report(a):
     from . import report
     rel = release.load(a.release)
-    out = report.build(a.release)
+    out = report.build(a.release, live_only=a.live_only)
     print(f"Report: {out.relative_to(release.ROOT)}")
     for s in report.summary(out) or []:
         if s["status"] == "skip":
             print(f"  – {s['site']:16} not compared yet: run both checks")
         else:
             print(f"  {'✗' if s['failed'] else '✓'} {s['site']:16} {s['failed']} failed of {s['checked']} checked"
+                  + (" (live only)" if s.get("mode") == "live-only" else "")
                   + (f" · {'; '.join(s['notes'])}" if s["notes"] else ""))
             if s.get("noise_suggest"):
                 print(f"    Noise test: these differ between two identical runs of {s['site']}. If they're timing or")
@@ -161,6 +167,7 @@ def main(argv=None):
     p = sub.add_parser("report", help="compare live and preview and open the report")
     p.add_argument("release")
     p.add_argument("--no-open", action="store_true", help="don't open the report in the browser")
+    p.add_argument("--live-only", action="store_true", help="report the live check on its own, even where a preview check exists")
     p.set_defaults(fn=cmd_report)
     a = ap.parse_args(argv)
     try:

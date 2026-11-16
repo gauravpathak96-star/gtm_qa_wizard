@@ -43,10 +43,12 @@ def gather(name):
     return rel, brands
 
 
-def build(name, data_override=None):
-    """Write the report; data_override replaces the gathered brands (used by the tests)."""
+def build(name, data_override=None, live_only=False):
+    """Write the report; data_override replaces the gathered brands (used by the tests). A brand with
+    only a live check, or every brand with live_only, gets a live-only section (no comparison)."""
     rel, brands = gather(name) if data_override is None else (data_override["release"], data_override["brands"])
-    data = {"release": {"name": rel.get("name", name), "tester": rel.get("tester", ""), "note": rel.get("note", "")}, "brands": brands}
+    data = {"release": {"name": rel.get("name", name), "tester": rel.get("tester", ""), "note": rel.get("note", "")}, "brands": brands,
+            "live_only": bool(live_only)}
     title = "GTM regression · " + data["release"]["name"]
     meta = " · ".join(x for x in [data["release"]["note"], data["release"]["tester"] and "Tester: " + data["release"]["tester"],
                                   "Generated " + datetime.now().strftime("%d %b %Y %H:%M")] if x)

@@ -37,6 +37,14 @@ purchase = "no"
 # ======================================================================
 product = "cheapest"
 
+# ======================================================================
+# Guest checkout email: typed into the site's guest checkout form at the Checkout step,
+# then Continue as guest is clicked (marketing is declined if the form asks).
+# Leave empty to stop at the checkout start page. A brand can override it with its own
+# guest_checkout_email.
+# ======================================================================
+guest_checkout_email = ""
+
 # ######################################################################
 # Brand: lookfantastic
 # ######################################################################

@@ -2,6 +2,12 @@
 
 Every change adds an entry here, newest first.
 
+## 2026-11-16 · Live-only report, guest checkout email, pop-ups
+
+- **Live-only report:** a brand with only a live check (e.g. after publishing) gets a section in the same table format, with Live columns only. With no comparison, a row fails on consent (calls before the choice or after Reject all; strictly necessary vendors excepted, Google only when gcs says granted), a tag Tag Assistant shows as failed, or a broken value in a call. `gtm-qa report <release> --live-only` forces it. Tag Assistant can run in a live check with only a live link. Comparison results are unchanged: the saved thg-consent-template-fix report rebuilds to the same counts on all 6 brands.
+- **`guest_checkout_email`** in the release file (a brand can override it): at Checkout the email goes into the guest form, marketing is declined if asked, and Continue as guest is clicked. All 6 recipes have a `guest_checkout` block (`#guestEmail`). Tested by filling the form on LF (no marketing question) and Mankind (marketing declined); Continue as guest wasn't clicked in testing.
+- **Sign-up pop-ups:** a click covered by a pop-up (Listrak's newsletter offer on MyProtein) closes it and clicks again. This made the cheapest product fail on MyProtein and Cult Beauty, whose cheaper tiles sit further down the page. All 6 sites now reach Checkout with the cheapest product.
+
 ## 2026-11-16 · Storefront and checkout Share links, one field each
 
 - **Release files name each link:** `storefront_preview_link`, `storefront_live_link`, `checkout_preview_link`, `checkout_live_link`, one link each (no list). Every brand gets all four; the checkout ones stay empty when the site uses one container. Older files with `preview_links` / `live_links` still work, but a brand can't mix both layouts.

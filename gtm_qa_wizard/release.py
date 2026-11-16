@@ -70,6 +70,14 @@ purchase = "no"
 # Live and Preview always test the same product.
 # ======================================================================
 product = "cheapest"
+
+# ======================================================================
+# Guest checkout email: typed into the site's guest checkout form at the Checkout step,
+# then Continue as guest is clicked (marketing is declined if the form asks).
+# Leave empty to stop at the checkout start page. A brand can override it with its own
+# guest_checkout_email.
+# ======================================================================
+guest_checkout_email = ""
 """
 
 BRAND = """
@@ -136,10 +144,12 @@ def links(b):
         live = [l for l in (f["storefront_live_link"], f["checkout_live_link"]) if l]
         pairs = [(f[c + "_preview_link"], f[c + "_live_link"]) for c in ("storefront", "checkout")]
         ta = next((pr for pr in pairs if pr[0] and pr[1]), ("", ""))
+        if not prev and live:   # live only: Tag Assistant can follow the live version on its own
+            ta = ("", live[0])
     else:
         prev = [l for l in (b.get("preview_links") or []) if str(l).strip()]
         live = [l for l in (b.get("live_links") or []) if str(l).strip()]
-        ta = (prev[0], live[0]) if prev and live else ("", "")
+        ta = (prev[0], live[0]) if prev and live else ("", live[0]) if live else ("", "")
     return prev, live, ta
 
 
@@ -180,14 +190,16 @@ def load(name):
         rel = tomllib.load(f)
     rel.setdefault("journeys", list(JOURNEYS))
     rel.setdefault("purchase", "no")
+    rel.setdefault("guest_checkout_email", "")
     rel["product"] = str(rel.get("product") or "cheapest").strip().lower()
     brands = rel.get("brands") or []
     if not brands and rel.get("site"):   # a single-brand file written by hand
-        brands = [{k: rel.get(k) for k in ("site", "url", "preview_links", "live_links", *LINK_FIELDS, "product_url", "exports_before", "exports_after", "purchase") if rel.get(k) is not None}]
+        brands = [{k: rel.get(k) for k in ("site", "url", "preview_links", "live_links", *LINK_FIELDS, "product_url", "exports_before", "exports_after", "purchase", "guest_checkout_email") if rel.get(k) is not None}]
     for b in brands:
         b["mixed_links"] = any(k in b for k in LINK_FIELDS) and any(k in b for k in ("preview_links", "live_links"))
         b["preview_links"], b["live_links"], b["ta_links"] = links(b)
         b.setdefault("purchase", rel["purchase"])
+        b["guest_checkout_email"] = str(b.get("guest_checkout_email") or rel["guest_checkout_email"] or "").strip()
         if not b.get("url"):
             try:
                 b["url"] = recipe(b["site"]).get("url", "")
@@ -223,6 +235,13 @@ def problems(rel, check=None):
         if sp and cp and cid(sp) and cid(sp) == cid(cp):
             out.append(("error", f"{s}: storefront_preview_link and checkout_preview_link are both {cid(sp)}. "
                                  "If checkout uses the same container, leave checkout_preview_link empty"))
+        em = b["guest_checkout_email"]
+        if em and not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", em):
+            out.append(("error", f"{s}: guest_checkout_email \"{em}\" isn't an email address"))
+        if em and "guest_checkout" not in recipe(s):
+            out.append(("error", f"{s}: guest_checkout_email is set but sites/{s}.json has no guest_checkout form to fill"))
+        if yes_no(b.get("purchase")) is True and not em:
+            out.append(("warn", f"{s}: purchase = \"yes\" with no guest_checkout_email: you'll sign in or type the email yourself"))
         if yes_no(b.get("purchase")) is None:
             out.append(("error", f"{s}: purchase = \"{b.get('purchase')}\": use \"yes\" or \"no\""))
         for l in b["preview_links"] + b["live_links"]:
@@ -241,7 +260,7 @@ def problems(rel, check=None):
             if f and not Path(f).expanduser().exists() and not (ROOT / f).exists():
                 out.append(("error", f"{s}: exports_{side} file not found: {f}"))
         if check is None and not b["preview_links"]:
-            out.append(("warn", f"{s}: no preview link yet (needed before the preview check)"))
+            out.append(("warn", f"{s}: no preview link: only the live check can run (gtm-qa report makes a live-only report)"))
     if not rel.get("tester"):
         out.append(("warn", "tester is empty"))
     return out

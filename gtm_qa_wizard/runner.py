@@ -35,6 +35,10 @@ IGNORED_TYPES = {"document", "stylesheet", "script", "font", "media", "manifest"
 ONETRUST_ACCEPT = ["#onetrust-accept-btn-handler"]
 ONETRUST_REJECT = ["#onetrust-reject-all-handler"]
 ONETRUST_SETTINGS = ["#onetrust-pc-btn-handler"]
+# sign-up pop-ups that can cover a tile or button (Listrak's newsletter offer on THG sites); a recipe
+# can add its own with "popup_close"
+POPUP_CLOSE = ["#ltkpopup-container .simpleltkmodal-close", "#ltkpopup-container button.ltkpopup-close",
+               "[role=dialog][aria-modal=true] button[aria-label*='close' i]"]
 ONETRUST_PC_REJECT = [".ot-pc-refuse-all-handler", "#onetrust-pc-sdk button:has-text('Reject All')"]
 STD_NAMES = {"home": "Home", "category": "Category", "product": "Product", "add_to_basket": "Add to basket",
              "add_to_cart": "Add to basket", "basket": "Basket", "cart": "Basket", "checkout": "Checkout",
@@ -229,6 +233,7 @@ class Journey:
         self.product_url = product_url
         self.purchase = bool(release.yes_no(brand.get("purchase")))
         self.product_choice = brand.get("product_choice", "cheapest")
+        self.guest_email = brand.get("guest_checkout_email", "")
         self.current = "Before consent"
         self.urls = {}
         self.previews = {}
@@ -303,6 +308,28 @@ class Journey:
             pass
         self.page.wait_for_timeout(WAIT_S * 1000)
 
+    def close_popups(self):
+        """Close a sign-up pop-up covering the page. Returns True if one was closed."""
+        for sel in (self.recipe.get("popup_close") or []) + POPUP_CLOSE:
+            try:
+                loc = self.page.locator(sel).first
+                if loc.is_visible(timeout=300):
+                    loc.click(timeout=3000)
+                    self.page.wait_for_timeout(800)
+                    return True
+            except Exception:
+                pass
+        return False
+
+    def click(self, loc, timeout):
+        """Click; if a pop-up covers the element, close it and click again."""
+        try:
+            loc.click(timeout=min(timeout, 8000))
+        except Exception:
+            if not self.close_popups():
+                raise
+            loc.click(timeout=timeout)
+
     def click_first(self, selectors, wait_s):
         deadline = time.time() + wait_s
         while True:
@@ -339,7 +366,7 @@ class Journey:
             p.goto(part["url"].replace("{base_url}", self.base), wait_until="domcontentloaded", timeout=45000)
             return "Opened " + part["url"].replace("{base_url}", self.base)
         if a == "click":
-            p.locator(sel).first.click(timeout=part.get("timeout", 15000))
+            self.click(p.locator(sel).first, part.get("timeout", 15000))
             return "Clicked " + sel
         if a == "click_random":
             loc = p.locator(sel)
@@ -363,7 +390,7 @@ class Journey:
                 i = vis[min(int(self.recipe.get("product_index", 0)), len(vis) - 1)]   # the same tile in every check
             el = loc.nth(i)
             el.scroll_into_view_if_needed(timeout=5000)
-            el.click(timeout=part.get("timeout", 15000))
+            self.click(el, part.get("timeout", 15000))
             return "Clicked the product tile (" + urlparse(hrefs[i]).path + ") on the category page"
         if a == "fill":
             for s, v in part["fields"].items():
@@ -403,21 +430,42 @@ class Journey:
             el = p.locator(sel).nth(t["i"])
             try:
                 el.scroll_into_view_if_needed(timeout=5000)
-                el.click(timeout=part.get("timeout", 15000))
+                self.click(el, part.get("timeout", 15000))
                 p.wait_for_load_state("domcontentloaded", timeout=30000)
                 if add:
                     btn = p.locator(add).first
                     btn.wait_for(state="visible", timeout=10000)
                     if not btn.is_enabled():
                         raise RuntimeError("Add to basket disabled")
-            except Exception:
-                skipped.append(urlparse(t["href"]).path)
+            except Exception as e:
+                skipped.append(urlparse(t["href"]).path + " (" + str(e).splitlines()[0][:80] + ")")
                 continue
             if skipped:
                 info["note"] = (f"Cheapest product that can be added to the basket. Skipped {len(skipped)} cheaper one(s) "
                                 f"that couldn't be added: {', '.join(skipped)}")
             return f"Clicked the cheapest product tile ({urlparse(t['href']).path}, {t['price']:.2f}) on the category page"
         raise RuntimeError(f"None of the {len(skipped)} cheapest products could be added to the basket: {', '.join(skipped)}")
+
+    def guest_checkout(self):
+        """Type the guest email into the checkout form, decline marketing if asked, continue as guest."""
+        g, p = self.recipe["guest_checkout"], self.page
+        field = p.locator(g["email"]).first
+        field.wait_for(state="visible", timeout=20000)
+        field.fill(self.guest_email, timeout=10000)
+        if g.get("decline_marketing"):
+            try:
+                box = p.locator(g["decline_marketing"]).first
+                if box.is_visible(timeout=1000):
+                    box.check(timeout=3000)
+            except Exception:
+                pass
+        before = p.url
+        self.click(p.locator(g["continue"]).first, 15000)
+        try:
+            p.wait_for_url(lambda u: u != before, timeout=20000)
+        except Exception:
+            pass
+        return "Continued as guest with " + self.guest_email
 
     def wait_for_enter(self):
         """Wait for Enter in the terminal while the browser keeps working (the preview routing and
@@ -545,6 +593,8 @@ class Journey:
                             raise
                         continue   # an optional click (e.g. a pop-up that doesn't always show)
                     via = via or info.get("via") or VIA_OF_ACTION.get(act, "action")
+                if name == "Checkout" and self.guest_email and self.recipe.get("guest_checkout"):
+                    actions.append(self.guest_checkout())
                 # a click that stays on the same page (Add to basket) is an in-page action
                 if via == "click" and self.page.url.split("?")[0] == before:
                     via = "action"
@@ -609,7 +659,8 @@ def run_check(name, check, headed=False, only=None, log=print, no_preview=False,
             for j in rel["journeys"]:
                 log(f"  {j} journey (fresh visitor, {'Accept all' if j == 'opt-in' else 'Reject all'})")
                 # Tag Assistant's debug mode changes how some tags behave, so it runs in both checks or in neither
-                ta_link = "" if no_ta or not (ta_prev and ta_live) else \
+                # with both links Tag Assistant runs in both checks; with only a live link, in the live check (live only)
+                ta_link = "" if no_ta or not ta_live or (check == "preview" and not ta_prev) else \
                     with_site_url(ta_prev if check == "preview" else ta_live, b["url"])
                 jr = Journey(browser, b, recipe, check, j, product, log, ta_link)
                 try:

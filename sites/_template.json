@@ -60,5 +60,11 @@
   ],
   "_noise_help": "Events a noise test showed differ between two identical runs (\"Vendor:event\"). Left out of every report for this site and listed under Not compared.",
   "noise_events": [],
-  "_optional_help": "A journey entry with \"optional\": true is skipped when it can't be done, e.g. a pop-up that doesn't always show."
+  "_optional_help": "A journey entry with \"optional\": true is skipped when it can't be done, e.g. a pop-up that doesn't always show.",
+  "_guest_checkout_help": "Optional. Used when the release file has guest_checkout_email: at Checkout the email is typed into email, decline_marketing (optional) is clicked if it's there, then continue is clicked.",
+  "guest_checkout": {
+    "email": "#guestEmail",
+    "decline_marketing": "input[id*='I_DO_NOT_CONSENT']",
+    "continue": "button:has-text('Continue as guest')"
+  }
 }

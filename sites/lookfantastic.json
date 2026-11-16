@@ -57,5 +57,11 @@
   "_noise_help": "Events a noise test (gtm-qa run <release> preview --without-workspace) showed differ between two identical runs. Left out of every report for this site and listed under Not compared. Format: \"Vendor:event\".",
   "noise_events": [
     "GA4:ring_icon_viewed"
-  ]
+  ],
+  "_guest_checkout_help": "Used when the release file has guest_checkout_email: at Checkout the email is typed into the guest form, marketing is declined if asked, and Continue as guest is clicked.",
+  "guest_checkout": {
+    "email": "#guestEmail",
+    "decline_marketing": "input[id*='I_DO_NOT_CONSENT']",
+    "continue": "button:has-text('Continue as guest')"
+  }
 }

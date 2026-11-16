@@ -39,5 +39,11 @@
       "action": "click",
       "selector": "#summary-checkout-btn"
     }
-  ]
+  ],
+  "_guest_checkout_help": "Used when the release file has guest_checkout_email: at Checkout the email is typed into the guest form, marketing is declined if asked, and Continue as guest is clicked.",
+  "guest_checkout": {
+    "email": "#guestEmail",
+    "decline_marketing": "input[id*='I_DO_NOT_CONSENT']",
+    "continue": "button:has-text('Continue as guest')"
+  }
 }
