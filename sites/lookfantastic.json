@@ -53,5 +53,9 @@
   "cookie_banner_reject": [
     "#onetrust-reject-all-handler",
     "button:has-text('Reject All')"
+  ],
+  "_noise_help": "Events a noise test (gtm-qa run <release> preview --without-workspace) showed differ between two identical runs. Left out of every report for this site and listed under Not compared. Format: \"Vendor:event\".",
+  "noise_events": [
+    "GA4:ring_icon_viewed"
   ]
 }

@@ -394,3 +394,153 @@ const raTxt=x=>(x.s==='removed'?'Removed':'Added')+' · '+x.name+(x.vendor?' ('+
 function rgSheet(G){return[['Result','Journey / action','Vendor','Check','Getting tracked? (Live)','Getting tracked? (Preview)','Tag fired (Live)','Tag fired (Preview)','Why it failed']]
   .concat(G.failed.concat(G.rows.filter(x=>x.st!=='fail')).map(x=>{const c=rgCells(x);return[c[0],c[1],x.vendor,x.pairTxt,c[2],c[3],c[4],c[5],rgWhy(x).join('\n')];}));}
 function rgListRows(LS,G){return[['List','Item']].concat(LS.ra.map(x=>['Removed or added in this release',raTxt(x)])).concat(LS.set.map(x=>['Settings change that can affect tracking',x])).concat(G.cov.map(x=>['Not compared',x])).concat(G.notes.map(x=>['Not compared',x]));}
+// variable checks (the tester page's Key variables rules), copied unchanged
+const VAR_SKIP=/^_(event|random|triggers|url)$|^(event|cev - event)$|container (id|version)|debug mode|gtm\.?start|random|stamp|\bdate\b|\btime\b|history|scroll|click|element|form text|video|error (line|message|url)|user ?agent|screenres|referr|eventdata|event - event|event_name|elysium|^aev - /i;
+const VAR_SESSION=/session|visit|cart.?id|basket.?id|affil|order.?id|transaction.?id|user.?id|visitor.?id|customer.?id|client.?id|event.?id|thguserid|chumewe|email|hash|token|consentid|_derived_epik|_dyid|optanonalertboxclosed|1st party cookie - optanonconsent|_ga\b|gclid|fbclid|unique|uuid|guid/i;
+const VAR_KEY=/price|value|revenue|total|amount|currency|\bcu\b|items?\b|item_|sku|product|qty|quantity|ecommerce|basket|cart|checkout|transaction|order|discount|coupon|page.?(type|category)|pagetype|content.?group|ecomm|contents? array|content_?ids?|consent|cookies allowed|marketing|analytics|advertising|locale|country|region|site.?id|site name|measurement id|pixel id|conversion id|account id|tag id|merchant id|tracker id|login/i;
+function itemsOf(v){
+  const g=re=>[...String(v).matchAll(re)].map(m=>m[1]);
+  const ids=g(/\b(?:item_id|content_id|productSKU|sku|id)\s*:\s*"?([A-Za-z0-9_-]+)"?/g),pr=g(/\b(?:price|item_price|productPrice)\s*:\s*"?(-?[\d.]+)"?/g).map(x=>String(parseFloat(x))),qt=g(/\bquantity\s*:\s*"?(\d+)"?/g);
+  return ids.length||pr.length?{ids,pr,qt}:null;}
+function varIssue(name,A,B){
+  if(A===B||emptyV(A))return null;
+  if(/\[redacted\]/.test(A+B))return{skip:'values redacted in one of the checks'};
+  if(emptyV(B))return{what:'Value lost',detail:[]};
+  if(VAR_SESSION.test(name)||[A,B].every(v=>/^\[?"?\d{10,13}(\.\d+)?"?\]?$/.test(v)))return{skip:'session values that change on every visit'};
+  if(!VAR_KEY.test(name))return{skip:'variables that don’t carry tracking values'};
+  if(/promotion_id|creative_name|creative_slot/.test(A+B))return{skip:'page content that differs between visits (promotions)'};
+  const ia=itemsOf(A),ib=itemsOf(B);
+  if(ia&&ib){const d=itemsDiff(ia,ib);return d.length?{what:'Items changed',detail:d}:null;}
+  return{what:'Value changed',detail:[]};
+}
+const gcsMore=(a,b)=>/^G1[01]{2}$/.test(a)&&/^G1[01]{2}$/.test(b)&&[2,3].some(i=>a[i]==='0'&&b[i]==='1');
+const PER_EVENT=/ecommerce|item|value|price|revenue|total|quantity|qty|transaction|order|basket ?(array|items|length|total)/i;
+const CATS=[['tag','Tags lost','A tag that fired on Live doesn’t fire in Preview'],['variable','Variables broken','A value Live captured is missing or different in Preview'],['consent','Consent','Opt-in and opt-out behave as on Live'],['call','Vendor calls','A call Live sent is missing or its key values changed']];
+const CTYPES=[['analytics_storage','Analytics'],['ad_storage','Ads'],['ad_user_data','Ad user data'],['ad_personalization','Ad personalisation']];
+function listAll(s){const w=String(s||'').toLowerCase().split(',').map(x=>x.trim()).filter(Boolean);return!w.length||w.some(x=>/^(all|\*|everything|all tags|all variables)$/.test(x));}
+function scopeWords(){return String((S.rel&&S.rel.cfg.tags)||'').toLowerCase().split(',').map(s=>s.trim()).filter(Boolean);}
+function namingOnly(){return!!(S.rel&&S.rel.cfg&&S.rel.cfg['x-naming']);}
+function inScope(txt){if(namingOnly())return false;const w=scopeWords();if(w.some(x=>/^(all|\*|everything|all tags)$/.test(x)))return false;const t=String(txt).toLowerCase();return w.some(x=>t.includes(x)||x.split(/\s+/).every(p=>t.includes(p)));}
+const sameVendor=(tv,hv)=>!!tv&&(hv===tv||hv.indexOf(tv+' ')===0);
+const trigSig=x=>x?JSON.stringify([x.fire.map(t=>t.c).sort(),x.block.map(t=>t.c).sort(),x.paused]):'';
+function regression(cmp){
+  const N=cmp.N,rows=[],nc={};const skip=(why,n)=>{nc[why]=(nc[why]||0)+(n||1);};
+  const allVars=listAll(S.rel&&S.rel.cfg.vars),listed=allVars?[]:String(S.rel.cfg.vars).split(',').map(s=>s.trim()).filter(Boolean);
+  const partial=s=>!!s&&(/partial|fail/.test(s.status)||!!(s.capture&&s.capture.cap_hit_before_boost&&s.via!=='action'));
+  const nmItem=(k,was,now)=>S.naming&&S.naming.items.find(it=>it.k===k&&((now&&it.b===now)||(was&&it.a===was)));
+  const diag=(ph,a,b)=>{const d=S.phases[ph]&&S.phases[ph].diagnosis;return d?(d.tags||[]).find(t=>t&&(t.tag===a||t.tag===b)):null;};
+  const side=id=>id==='benchmark'?'before':'after';
+  const uses=(id,name)=>{const M=S.tmap&&S.tmap[side(id)];return M&&M.vars?M.vars[name]||[]:null;};
+  const pairs=[];if(N.preview&&N.benchmark)pairs.push(['benchmark','preview']);if(N.postlive&&(N.preview||N.benchmark))pairs.push([N.preview?'preview':'benchmark','postlive']);
+  const consent={};
+  pairs.forEach(([rid,cid])=>{
+    const R=N[rid],C=N[cid],rName=phName(rid),cName=phName(cid);
+    SCENS.forEach(([sk,scen,choice])=>{
+      const RS=sk==='steps'?R.steps:R.optout,CS=sk==='steps'?C.steps:C.optout;
+      const cv=consent[cid+'|'+sk]={check:cName,scen,choice,run:!!(RS&&RS.length&&CS&&CS.length),broken:0};
+      if(!cv.run){skip(scen.toLowerCase()+' journey not run in both checks');return;}
+      const taR=RS.some(s=>s.tags.length),taC=CS.some(s=>s.tags.length);
+      const varR=RS.some(s=>Object.keys(s.vars||{}).length),varC=CS.some(s=>Object.keys(s.vars||{}).length);
+      RS.forEach(rs=>{
+        const cs=CS.find(s=>s.key===rs.key);if(!cs){skip('steps not done in both checks');return;}
+        const action={name:rs.name,key:rs.key,did:(cs.actions.length?cs.actions:rs.actions).join(' · ')};
+        const strict=sk==='optout'||CONSENT_STEP(rs.key);   // nothing new may fire here
+        const base={action,scen,cid,rid,check:cName,ref:rName,stepKey:rs.key};
+        const push=(cat,r)=>{rows.push(Object.assign({cat,detail:[],setting:[],trg:null},base,r));if(r.st==='broken'&&cat==='consent')cv.broken++;};
+        // ---- vendor calls
+        const byV=s=>{const m={};s.hits.forEach(h=>{if(/^Unrecognised/i.test(h.vendor)||NON_GTM.test(h.vendor)||NOT_COMPARED.test(h.vendor))return;const e=(m[h.vendor]=m[h.vendor]||{})[h.ev]||(m[h.vendor][h.ev]={n:0,params:h.params});e.n+=h.n;});return m;};
+        const HR=byV(rs),HC=byV(cs);
+        skip('calls to hosts the capture script doesn’t recognise',rs.hits.filter(h=>/^Unrecognised/i.test(h.vendor)).length);
+        skip('sponsored-ad beacons (Criteo Retail Media): they depend on which ads the site shows',rs.hits.concat(cs.hits).filter(h=>NOT_COMPARED.test(h.vendor)).length);
+        const callTxt=(m,v)=>{const e=m[v];return e?Object.keys(e).map(k=>(k==='(calls)'?'calls':k)+' ×'+e[k].n).join(', '):'none';};
+        const gapped=v=>cs.gaps.concat(rs.gaps).some(g=>g.toLowerCase()===v.toLowerCase());
+        const callIssues=v=>{const out=[];const r=HR[v]||{},c=HC[v]||{};
+          if(gapped(v)){skip('vendors not captured at a step');return out;}
+          const named=Object.keys(r).filter(e=>e!=='(calls)'&&!/[./]/.test(e));
+          named.forEach(e=>{if(BEHAVIOUR.test(e)){skip('interaction events (scroll, engagement)');return;}
+            const fl=x=>String(x).toLowerCase().replace(/[^a-z0-9]/g,'');
+            if(!c[e]&&fl(e).length>3&&timedHere.some(t=>t&&fl(t).includes(fl(e)))){skip('tags fired by element visibility, scroll or timer triggers (depend on what was on screen and when)');return;}
+            if(!c[e]){if(partial(cs))skip('calls on a step the check only partly captured');else out.push(e+' not sent (sent ×'+r[e].n+' on '+rName+')');return;}
+            const a=r[e].params||{},b=c[e].params||{};
+            Object.keys(a).forEach(k=>{const A=vNorm(a[k]),B=b[k]==null?'':vNorm(b[k]);
+              if(CALL_ORDER.test(k)){if(!emptyV(A)&&emptyV(B))out.push(e+': '+k+' lost (was '+A.slice(0,60)+')');return;}
+              if(!CALL_KEY.test(k)||A===B)return;
+              if(/^pr\d+$/.test(k)){const d=itemsDiff(itemsOfPr(A),itemsOfPr(B));if(b[k]==null)out.push(e+': '+k+' (item) missing');else d.forEach(x=>out.push(e+': '+x));return;}
+              out.push(e+': '+k+(b[k]==null?' missing (was '+A.slice(0,60)+')':' '+A.slice(0,60)+' → '+B.slice(0,60)));});
+            if(strict&&gcsMore(String(a.gcs||''),String(b.gcs||'')))out.push(e+': consent signal gcs '+a.gcs+' → '+b.gcs+' (grants more than Live)');
+            Object.keys(b).forEach(k=>{if(BAD_VALUE.test(String(b[k]))&&String(a[k])!==String(b[k]))out.push(e+': '+k+' = '+b[k]);});});
+          if(!named.length&&Object.keys(r).length&&!Object.keys(c).length){if(partial(cs))skip('calls on a step the check only partly captured');else out.push('no '+v+' calls at all (×'+Object.values(r).reduce((x,y)=>x+y.n,0)+' on '+rName+')');}
+          return out;};
+        // ---- tags, paired across renames and re-creations
+        const pk=L=>L&&!/^(added|removed)$/.test(L.it.s)?L.key:null;
+        const tk=(ph,s)=>{const m=new Map();s.tags.forEach(t=>{const L=nmLook('tag',ph,t.name);const k=pk(L)||t.name;const e=m.get(k)||{name:t.name,now:L?L.now:t.name,was:L&&L.ren?L.was:'',n:0,fail:false};e.n+=t.count||1;if(t.status==='fail')e.fail=true;m.set(k,e);});return m;};
+        const TR=tk(rid,rs),TC=tk(cid,cs);const here=[],timedHere=[];
+        if(taR&&taC)new Set([...TR.keys(),...TC.keys()]).forEach(k=>{
+          const a=TR.get(k),b=TC.get(k);const now=(b&&b.name)||(a&&a.now)||(a&&a.name),was=a?a.name:'';
+          const v=tagVendor(now,was);const trg={live:tagTriggers(side(rid),was||now),cur:tagTriggers(side(cid),now)};trg.changed=!!(trg.live&&trg.cur&&trigSig(trg.live)!==trigSig(trg.cur));
+          const it=nmItem('tag',was,now);
+          const r={kind:'tag',tag:now,was:was&&was!==now?was:'',vendor:v,trg,setting:it&&it.d?it.d.slice(0,4).map(d=>d.f+': '+d.a+' → '+d.b):[],dg:diag(cid,now,was),
+            live:a?'Fired ×'+a.n+(a.fail?' (failed)':''):'Didn’t fire',cur:b?(b.fail?'Failed':'Fired')+' ×'+b.n:'Didn’t fire',calls:v?{live:callTxt(HR,Object.keys(HR).find(x=>sameVendor(v,x))),cur:callTxt(HC,Object.keys(HC).find(x=>sameVendor(v,x)))}:null,detail:[]};
+          const sc=inScope(now)||inScope(was);let cat='tag';
+          if(!a!==!b&&!sc){
+            // fired in one check only, but its trigger depends on timing or on an event the site didn't push in the other check
+            if(timedTrig(trg.live)||timedTrig(trg.cur)){timedHere.push(now,was);skip('tags fired by element visibility, scroll or timer triggers (depend on what was on screen and when)');return;}
+            const evs=ceEvents(trg.live).concat(ceEvents(trg.cur)),off=a?cs:rs,on=a?rs:cs;
+            if(evs.length&&!evs.some(e=>off.rawdl.includes(e))&&evs.some(e=>on.rawdl.includes(e))){skip('tags whose trigger event the site didn’t push in one of the checks');return;}}
+          if(b&&b.fail&&!(a&&a.fail)){r.st='broken';r.what='Tag failed in '+cName;}
+          else if(a&&!b){r.st=sc?'change':'broken';r.what=it&&it.s==='removed'?'Removed from the workspace, so it no longer fires':'Fired on '+rName+', didn’t fire in '+cName;
+            if(sk==='steps'&&/^home/.test(rs.key)&&!sc){cat='consent';r.what+=' after '+choice+' on the landing page';}}
+          else if(!a&&b){if(strict&&!sc){cat='consent';r.st='broken';r.what=(CONSENT_STEP(rs.key)?'Fires before the consent choice in ':'Fires after Reject all in ')+cName+' only';}else{r.st=sc?'change':'new';r.what='Only in '+cName;}}
+          else{r.st=sc?'change':'ok';r.what=a.n===b.n?'Fired in both':'Fired in both (×'+a.n+' → ×'+b.n+')';}
+          r.cat=cat;here.push(r);});
+        else if(rs.tags.length||cs.tags.length)skip('tags at steps without Tag Assistant data in both checks',Math.max(rs.tags.length,cs.tags.length));
+        // a vendor's failing calls go on its lost tag when exactly one of its tags was lost here
+        Object.keys(HR).forEach(v=>{const iss=callIssues(v);if(!iss.length)return;
+          const bt=here.filter(r=>r.st==='broken'&&r.cat==='tag'&&sameVendor(r.vendor,v));if(bt.length===1){bt[0].detail.push(...iss);return;}
+          let cand=[...TR.values()].filter(t=>sameVendor(tagVendor(t.now,t.name),v)).map(t=>t.now),likely=false;
+          if(!cand.length&&S.tmap&&S.tmap[side(cid)]){const flat=x=>String(x).toLowerCase().replace(/[^a-z0-9]/g,'');const evs=Object.keys(HR[v]).filter(e=>!HC[v]||!HC[v][e]).map(flat).filter(e=>e.length>3);
+            cand=Object.keys(S.tmap[side(cid)].tags).filter(n=>sameVendor(tagVendor(n),v)&&evs.some(e=>flat(n).includes(e)));likely=cand.length>0;}
+          const missing=iss.some(x=>/not sent|no .* calls at all/.test(x));
+          // a changed parameter: name the workspace item whose setting of the same name changed (ep.ads_data_redaction -> ads_data_redaction)
+          const pks=[...new Set(iss.map(x=>(x.match(/^[^:]+: (\S+)/)||[])[1]).filter(Boolean).map(k=>k.replace(/^(ep|epn|up)\./,'')))];
+          const cause=!missing&&S.naming?S.naming.items.filter(it=>(it.d||[]).some(d=>pks.some(k=>String(d.f).split('.').pop()===k))):[];
+          if(cause.length){cand=cause.map(it=>it.b||it.a);likely='cause';}
+          const ci=cand.length===1?(cause[0]||nmItem('tag','',cand[0])):null;
+          const trg=cand.length===1?(()=>{const t=[...TR.values()].find(x=>x.now===cand[0]);const L=nmLook('tag',cid,cand[0]);const was=t?t.name:(L&&L.was)||cand[0];const g={live:tagTriggers(side(rid),was),cur:tagTriggers(side(cid),cand[0])};g.changed=!!(g.live&&g.cur&&trigSig(g.live)!==trigSig(g.cur));return g;})():null;
+          const onAccept=missing&&sk==='steps'&&/^home/.test(rs.key);
+          push(onAccept?'consent':'call',{kind:'call',tag:cand.join(', '),likely,vendor:v,trg,setting:ci&&ci.d?ci.d.slice(0,4).map(d=>d.f+': '+d.a+' → '+d.b):[],
+            st:inScope(v)?'change':'broken',what:v+' call '+(missing?'missing'+(onAccept?' after '+choice+' on the landing page':''):'changed'),detail:iss,live:callTxt(HR,v),cur:callTxt(HC,v)});});
+        // calls Preview sends where Live sent none: before the choice or after Reject all, that's a consent break
+        if(strict)Object.keys(HC).forEach(v=>{const r=HR[v]||{},c=HC[v];if(gapped(v))return;
+          const cookieless=e=>/^G100$/.test(String((c[e].params||{}).gcs||''));
+          const extra=Object.keys(c).filter(e=>!r[e]&&!BEHAVIOUR.test(e)&&!(e==='(calls)'&&Object.keys(r).length)&&!(cookieless(e)&&(skip('cookieless consent-mode pings (gcs G100: storage denied) after Reject all or before the choice'),true)));if(!extra.length||inScope(v))return;
+          push('consent',{kind:'call',tag:'',vendor:v,st:'broken',what:v+(CONSENT_STEP(rs.key)?' sends calls before the consent choice':' sends calls after Reject all')+' in '+cName+' only',detail:extra.map(e=>(e==='(calls)'?'calls':e)+' ×'+c[e].n),live:callTxt(HR,v),cur:callTxt(HC,v)});});
+        here.forEach(r=>push(r.cat,r));
+        // ---- consent state recorded by the capture script at this step
+        const cr=rs.consent,cc=cs.consent;
+        if(cr&&cc){const g=x=>/granted|true|^1$/i.test(String(x));const d=[];
+          CTYPES.forEach(([k,l])=>{if(cr[k]==null||cc[k]==null)return;if(strict&&!g(cr[k])&&g(cc[k]))d.push(l+' granted in '+cName+', denied on '+rName);if(!strict&&g(cr[k])&&!g(cc[k]))d.push(l+' denied in '+cName+', granted on '+rName);});
+          if(!CONSENT_STEP(rs.key)&&g(cr.update_fired)&&cc.update_fired!=null&&!g(cc.update_fired))d.push('No consent update in '+cName+' (fired on '+rName+')');
+          if(d.length)push('consent',{kind:'consent',tag:'Consent state',vendor:'',st:'broken',what:'Consent state differs',detail:d,live:CTYPES.map(([k,l])=>cr[k]==null?'':l+' '+cr[k]).filter(Boolean).join(', '),cur:CTYPES.map(([k,l])=>cc[k]==null?'':l+' '+cc[k]).filter(Boolean).join(', ')});}
+        // ---- GTM variables from Tag Assistant (Preview names paired with Live names through the exports)
+        if(varR&&varC){const vc={};Object.entries(cs.vars||{}).forEach(([k,x])=>{const L=nmLook('variable',cid,k);vc[pk(L)||k]={name:k,val:x};});const done=new Set();
+          Object.entries(rs.vars||{}).forEach(([k,x])=>{const L=nmLook('variable',rid,k);const key=pk(L)||k;const c=vc[key];const now=c?c.name:(L?L.now:k);
+            if(!allVars&&!listed.some(l=>[k,now].some(n=>n===l||n.endsWith(l)||l.endsWith(n))))return;
+            if(VAR_SKIP.test(k)||VAR_SKIP.test(now)){skip('variables that depend on timing, clicks or debug mode');return;}
+            if(!c){const rm=nmItem('variable',k,'');skip(rm&&rm.s==='removed'?'variables deleted in this release':'variables recorded in only one check');return;}
+            if(done.has(key))return;done.add(key);
+            const A=vNorm(x),B=vNorm(c.val);const iss=varIssue(k+' '+now,A,B);if(!iss)return;if(iss.skip){skip(iss.skip);return;}
+            // page-level values: when Preview reads Live's value at another step and Live reads Preview's at another, the data layer was just in a different state here
+            const seen=(SS,n,val)=>SS.some(s=>s.key!==rs.key&&s.vars&&s.vars[n]!=null&&vNorm(s.vars[n])===val);
+            if(!PER_EVENT.test(k+' '+now)&&seen(CS,now,A)&&seen(RS,k,B)){skip('page values that differed at one step only (the site pushed its data in a different order; both values show in both checks at other steps)');return;}
+            const it=nmItem('variable',k,now);
+            push('variable',{kind:'variable',tag:now,was:k!==now?k:'',vendor:'',uses:{live:uses(rid,k),cur:uses(cid,now)},setting:it&&it.d?it.d.slice(0,4).map(d=>d.f+': '+d.a+' → '+d.b):[],
+              st:inScope(now)?'change':'broken',what:iss.what,detail:iss.detail,live:A===''?'(empty)':A.slice(0,300),cur:B===''?'(empty)':B.slice(0,300)});});}
+      });
+    });
+  });
+  const O={broken:0,change:1,new:2,ok:3},CI={tag:0,variable:1,consent:2,call:3},SI={'Opt-in':0,'Opt-out':1};
+  rows.sort((a,b)=>CI[a.cat]-CI[b.cat]||O[a.st]-O[b.st]||SI[a.scen]-SI[b.scen]||stepIdx(a.stepKey)-stepIdx(b.stepKey)||String(a.tag||a.vendor).localeCompare(String(b.tag||b.vendor)));
+  const broken=rows.filter(r=>r.st==='broken');const sum={};CATS.forEach(([k])=>sum[k]=broken.filter(r=>r.cat===k).length);
+  return{rows,nc,broken,pairs,sum,consent:Object.values(consent)};
+}

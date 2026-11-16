@@ -36,6 +36,29 @@ STD_NAMES = {"home": "Home", "category": "Category", "product": "Product", "add_
              "add_to_cart": "Add to basket", "basket": "Basket", "cart": "Basket", "checkout": "Checkout",
              "begin_checkout": "Checkout"}
 VIA_OF_ACTION = {"goto": "direct", "click": "click", "click_random": "click"}
+# The value GTM holds for every top-level dataLayer key at the end of a step (what a Data Layer
+# Variable would read), so value breaks can name the variable. Objects are written the way Tag
+# Assistant shows them (item_id: "123"), which the report's item comparison reads.
+DL_VALUES_JS = """() => {
+  const g = window.google_tag_manager || {};
+  const id = Object.keys(g).find(k => /^GTM-/.test(k) && g[k] && g[k].dataLayer);
+  if (!id) return {};
+  const keys = new Set();
+  (window.dataLayer || []).forEach(e => {
+    if (!e || typeof e !== 'object' || Array.isArray(e) || '0' in e) return;
+    Object.keys(e).forEach(k => { const t = k.split('.')[0]; if (!/^(gtm|event|eventCallback|eventTimeout)$/.test(t)) keys.add(t); });
+  });
+  const out = {};
+  keys.forEach(k => {
+    try {
+      const v = g[id].dataLayer.get(k);
+      if (v === undefined || typeof v === 'function') return;
+      let s = typeof v === 'object' ? JSON.stringify(v).replace(/"([A-Za-z_][\\w]*)":/g, '$1:') : String(v);
+      out[k] = s.length > 2000 ? s.slice(0, 2000) : s;
+    } catch (e) {}
+  });
+  return out;
+}"""
 
 
 def parse_preview(link):
@@ -253,6 +276,10 @@ class Journey:
             rec["url"] = self.page.url.split("?")[0]
             rec["capture_gaps"] = ["all vendors (the capture script couldn't run on this page)"]
             rec["notes"] = "Capture failed: " + str(e).splitlines()[0][:200]
+        try:
+            rec["variables"] = self.page.evaluate(DL_VALUES_JS)
+        except Exception:
+            rec["variables"] = {}
         named = sorted({h["vendor"] for h in rec.get("hits") or [] if not str(h["vendor"]).startswith("Unrecognised")})
         calls = sum(h.get("count", 1) for h in rec.get("hits") or [])
         mark = "✓" if status == "ok" else "✗"

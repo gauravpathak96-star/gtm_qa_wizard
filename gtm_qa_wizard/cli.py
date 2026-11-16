@@ -8,6 +8,7 @@
   gtm-qa report <release>                                compare live and preview, open report.html
 """
 import argparse
+import json
 import subprocess
 import sys
 
@@ -125,6 +126,9 @@ def cmd_report(a):
         else:
             print(f"  {'✗' if s['failed'] else '✓'} {s['site']:16} {s['failed']} failed of {s['checked']} checked"
                   + (f" · {'; '.join(s['notes'])}" if s["notes"] else ""))
+            if s.get("noise_suggest"):
+                print(f"    Noise test: these differ between two identical runs of {s['site']}. If they're timing or")
+                print(f"    on-screen events, add them to \"noise_events\" in sites/{s['site']}.json: {json.dumps(s['noise_suggest'])}")
     if not a.no_open:
         subprocess.run(["open", str(out)], check=False)
     return 0

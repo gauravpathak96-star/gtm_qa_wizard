@@ -57,5 +57,7 @@
       "action": "click",
       "selector": "button:has-text('Continue')"
     }
-  ]
+  ],
+  "_noise_help": "Events a noise test showed differ between two identical runs (\"Vendor:event\"). Left out of every report for this site and listed under Not compared.",
+  "noise_events": []
 }

@@ -29,7 +29,8 @@ There's a fixed 8-second wait after each step. No order is ever placed.
 **What it records at every step:**
 
 - every request the page sends to a vendor, including events inside request bodies (batched GA4, Meta form data, TikTok JSON);
-- dataLayer events, the Google consent state, cookies, the GTM containers that loaded, and a screenshot.
+- dataLayer events, the Google consent state, cookies, the GTM containers that loaded, and a screenshot;
+- the value GTM holds for every dataLayer key at the end of the step (what a Data Layer Variable reads), such as ecommerce, currency and page type.
 
 The terminal prints each step as it runs.
 
@@ -91,7 +92,11 @@ Each brand takes about 2 minutes per check, so 6 brands take about 25 minutes fo
 uv run gtm-qa run <release> preview --without-workspace
 ```
 
-This runs the preview check on the live container, so the report compares Live with Live. Anything that fails there is noise, not a break. On LookFantastic it gave 0 failed of 142 checked.
+This runs the preview check on the live container, so the report compares Live with Live. Anything that fails there is noise, not a break.
+
+When a noise test finds events that differ between two identical runs, the report command names them and suggests adding them to `noise_events` in the site's recipe. Those events are typically on-screen widgets or timers. LookFantastic's chat icon, `GA4:ring_icon_viewed`, is one. Once listed, they're left out of every report for that site and shown under "Not compared", so nothing is hidden silently. You decide what goes in the list.
+
+With that one event listed, LookFantastic's noise test gives 0 failed of 142 checked.
 
 ### Optional: container exports
 
@@ -109,7 +114,8 @@ Release files and results stay on your computer. They're git-ignored because pre
 - `url`: the homepage;
 - the cookie banner's Accept and Reject buttons;
 - `journey`: the category page, the product tile selector, and the Add to basket and Checkout buttons;
-- optionally, `product_index`, to use a different tile than the first.
+- optionally, `product_index`, to use a different tile than the first;
+- `noise_events`: events a noise test showed differ between identical runs (see above).
 
 When a site changes and a step fails, the screenshots show where it stopped. Fix the recipe, then run both checks again with the fixed recipe. `sites/_template.json` shows every field.
 
@@ -117,9 +123,19 @@ Recipes so far: lookfantastic.
 
 ## What the report can and can't see
 
-Findings come from what reached each vendor: calls, events and key values such as value, currency, items and IDs.
+**Vendor calls:** what reached each vendor, at every step of both journeys: calls, events and the key parameters (value, currency, items, IDs).
 
-The "Tag fired" columns stay empty for now, because tag status comes from Tag Assistant, which these runs don't use. Reading Tag Assistant from your own Chrome is planned, and needs IT's approval for Chrome remote debugging.
+**Key values:** dataLayer values that carry tracking data (value, price, currency, items and item IDs, transaction ID, pixel and account IDs, consent). These fail when they're empty, broken or different in Preview. Values that change on every visit, such as visitor IDs and timestamps, are left out.
+
+**Likely cause:** with the container exports loaded, every failed row names the tag that most likely caused it. That's a tag of the same vendor whose name matches the event that broke. The row shows:
+
+- the tag's old and new names;
+- the trigger before and after;
+- the settings that changed.
+
+For MYP_NC, for example: "Pinterest - Search → Pinterest - Pixel - Search. Trigger was: Custom event view_item_list. Trigger now: elysiumEvent on /search/ only". It's labelled "likely" because it's matched from the exports, not seen firing.
+
+**Tags fired (not yet):** the "Tag fired" columns stay empty for now. Tag status comes from Tag Assistant, which these runs don't use yet. Tag Assistant does open in the tool's own browser without a sign-in, and a GTM Share preview link gives it access to the container. Reading it is being built: the preview check uses the workspace Share link, and the live check will use a Share link of the published live version.
 
 ## Tests
 

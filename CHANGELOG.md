@@ -2,6 +2,20 @@
 
 Every change adds an entry here, newest first.
 
+## 2026-11-16 · Likely cause, key values and noise events
+
+- **Likely cause:** with container exports loaded, every failed row names the tag of that vendor whose job matches the event that broke. It shows the old and new names, the trigger before and after, and the settings that changed. On MYP_NC it names "Pinterest - Search → Pinterest - Pixel - Search", "Tiktok - Search → TikTok - cHTML - Search" (trigger moved from view_item_list to elysiumEvent on /search/) and the new "GA4 - Event - Organic Search Visit".
+- **Key values:**
+  - At the end of every step the runner records the value GTM holds for each top-level dataLayer key, i.e. what a Data Layer Variable reads.
+  - The report compares them with the tester page's Key variables rules: value, price, currency, items, IDs and consent must match, and session values are only checked for being lost. These rules are copied unchanged into `engine.js`.
+  - Values that broke are listed as failures with Live and Preview side by side.
+- **Noise events:**
+  - Recipes can list `noise_events`, which are left out of the comparison and shown under "Not compared".
+  - After a noise test, `gtm-qa report` names the events that differed between two identical runs and suggests adding them.
+  - LookFantastic's chat icon impression (`GA4:ring_icon_viewed`) is the first entry.
+  - Tests: MYP_NC 3 failed of 123 (unchanged); LookFantastic noise test 0 failed of 142.
+- **Tag Assistant:** it opens in the tool's own Playwright browser without a sign-in, so no remote debugging of your Chrome is needed. Without a Share preview link it doesn't give access to the container. Reading tags and variables from it comes next, once a real Share link is available to build against.
+
 ## 2026-11-16 · Steps 2 and 3: the runner and the report
 
 - **`gtm-qa run <release> live|preview`** runs every brand of the release in a Playwright browser:

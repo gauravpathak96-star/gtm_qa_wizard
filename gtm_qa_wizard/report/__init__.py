@@ -25,7 +25,8 @@ def gather(name):
     brands = []
     for b in rel["brands"]:
         d = release.RUNS / name / b["site"]
-        item = {"site": b["site"], "url": b.get("url", ""), "preview_links": b["preview_links"]}
+        item = {"site": b["site"], "url": b.get("url", ""), "preview_links": b["preview_links"],
+                "noise_events": release.recipe(b["site"]).get("noise_events", [])}
         for check in release.CHECKS:
             f = d / check / "results.json"
             item[check] = _read_json(f) if f.exists() else None
