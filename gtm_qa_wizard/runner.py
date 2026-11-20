@@ -37,8 +37,11 @@ ONETRUST_REJECT = ["#onetrust-reject-all-handler"]
 ONETRUST_SETTINGS = ["#onetrust-pc-btn-handler"]
 # sign-up pop-ups that can cover a tile or button (Listrak's newsletter offer on THG sites); a recipe
 # can add its own with "popup_close"
-POPUP_CLOSE = ["#ltkpopup-container .simpleltkmodal-close", "#ltkpopup-container button.ltkpopup-close",
-               "[role=dialog][aria-modal=true] button[aria-label*='close' i]"]
+POPUP_CLOSE = ["listrak-popup[open] [aria-label*='close' i]", "listrak-popup[open] >> text=/^\\s*no,? thanks\\s*$/i",
+               "#ltkpopup-container .simpleltkmodal-close", "#ltkpopup-container button.ltkpopup-close",
+               ".simpleltkmodal-close", "[class*=ltkpopup] [class*=close]",
+               "button:text-matches('^\\s*no,? thanks\\s*$', 'i')", "a:text-matches('^\\s*no,? thanks\\s*$', 'i')",
+               "[role=dialog][aria-modal=true] button[aria-label*='close' i]", "[role=dialog] [aria-label*='close' i]"]
 ONETRUST_PC_REJECT = [".ot-pc-refuse-all-handler", "#onetrust-pc-sdk button:has-text('Reject All')"]
 STD_NAMES = {"home": "Home", "category": "Category", "product": "Product", "add_to_basket": "Add to basket",
              "add_to_cart": "Add to basket", "basket": "Basket", "cart": "Basket", "checkout": "Checkout",
@@ -110,12 +113,14 @@ class TagAssistant:
     """Tag Assistant in a tab of the same browser context, connected through a GTM Share preview link.
     It opens the site in a new tab in debug mode; the journey then runs in that tab. After each step
     the newest page's Tags tab is read: a page step gets that page's tags, an in-page step (the
-    consent click, add to basket, the checkout click) gets only the tags it added."""
+    consent click, add to basket, the checkout click) gets only the tags it added. Each new event in
+    the page's message list (cheq_response, Window Loaded, ...) is then selected in turn, to record
+    which event each tag fired on."""
 
     def __init__(self, ctx, link):
         self.ctx, self.link = ctx, link
         self.tab = ctx.new_page()
-        self.last_groups, self.last = 0, {}
+        self.last_groups, self.last, self.seen_msgs = 0, {}, set()
 
     def connect(self):
         self.tab.goto(self.link, wait_until="domcontentloaded", timeout=45000)
@@ -149,13 +154,40 @@ class TagAssistant:
                 k = (t["name"], "failed" if m.group(1) == "Failed" else "fired")
                 now[k] = now.get(k, 0) + int(m.group(2))
         same_page = n == self.last_groups
+        events = self.read_events(same_page)
         out = []
         for (name, status), c in now.items():
             c = c - (self.last.get((name, status), 0) if same_page else 0)
             if c > 0:
-                out.append({"name": name, "status": status, "count": c})
+                out.append({"name": name, "status": status, "count": c, "events": events.get(name, [])})
         self.last_groups, self.last = n, now
         return out
+
+    def read_events(self, same_page):
+        """{tag name: [events it fired on]} for the newest page's events not read before."""
+        if not same_page:
+            self.seen_msgs = set()
+        rows = self.tab.locator(".message-list__group").first.locator(".message-list__row--indented")
+        out = {}
+        try:
+            labels = [x.strip() for x in rows.all_inner_texts()]
+        except Exception:
+            return out
+        for i, lab in enumerate(labels):
+            if not lab or lab in self.seen_msgs:
+                continue
+            try:
+                rows.nth(i).click(timeout=3000)
+                self.tab.wait_for_timeout(300)
+                tags = self.tab.evaluate(TA_READ)
+            except Exception:
+                continue
+            self.seen_msgs.add(lab)
+            ev = re.sub(r"^\d+\s+", "", " ".join(lab.split()))
+            for t in tags:
+                if t["name"] and ev not in out.setdefault(t["name"], []):
+                    out[t["name"]].append(ev)
+        return {k: v[::-1] for k, v in out.items()}   # the list is newest first: oldest event first
 
 
 HIDE_TA_BADGE = """(() => { if (window.top !== window) return;
@@ -319,7 +351,12 @@ class Journey:
                     return True
             except Exception:
                 pass
-        return False
+        try:   # last resort: most pop-ups close on Escape
+            self.page.keyboard.press("Escape")
+            self.page.wait_for_timeout(800)
+            return True
+        except Exception:
+            return False
 
     def click(self, loc, timeout):
         """Click; if a pop-up covers the element, close it and click again."""

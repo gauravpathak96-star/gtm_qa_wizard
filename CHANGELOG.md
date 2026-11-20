@@ -2,6 +2,12 @@
 
 Every change adds an entry here, newest first.
 
+## 2026-11-16 · The event each tag fired on, Listrak pop-up
+
+- **Tag fired columns show the event:** after reading a step's tags, the run selects each new event in Tag Assistant's message list (cheq_response, Window Loaded, OneTrustGroupsUpdated, ...) and records which tags fired on it. The report shows it under the tag, e.g. "TikTok - Cheq ✓ on cheq_response". Saved per tag as `events`; runs from before this show the tag alone.
+- **Listrak's `<listrak-popup>`** (LF's "Extra 5% off" offer) is closed when it covers a click. It opens once the site tab has been in the background while Tag Assistant is read, which made the cheapest product fail on LF with Tag Assistant. Also matched now: a "No, thanks" button or link, and Escape as a last resort.
+- Tested: a full LF live check with Tag Assistant, both journeys, every step completed (about 5 minutes). The saved thg-consent-template-fix report rebuilds to the same results on all 6 brands.
+
 ## 2026-11-16 · Live-only report, guest checkout email, pop-ups
 
 - **Live-only report:** a brand with only a live check (e.g. after publishing) gets a section in the same table format, with Live columns only. With no comparison, a row fails on consent (calls before the choice or after Reject all; strictly necessary vendors excepted, Google only when gcs says granted), a tag Tag Assistant shows as failed, or a broken value in a call. `gtm-qa report <release> --live-only` forces it. Tag Assistant can run in a live check with only a live link. Comparison results are unchanged: the saved thg-consent-template-fix report rebuilds to the same counts on all 6 brands.

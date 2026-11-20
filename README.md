@@ -156,7 +156,7 @@ For MYP_NC, for example: "Pinterest - Search → Pinterest - Pixel - Search. Tri
 - **Page steps** record the tags fired on that page.
 - **In-page steps** (the consent click, Add to basket, the Checkout click) record only the tags that action added.
 
-These recorded tags fill the "Tag fired" columns and catch tags that stopped firing. To get a live-version link: GTM › Versions › the live version › Preview › Share.
+These recorded tags fill the "Tag fired" columns and catch tags that stopped firing. Under each tag, the report shows the event it fired on, for example "TikTok - Cheq ✓ on cheq_response": the tool selects each new event in Tag Assistant's message list in turn (about 10 seconds for a page with 30 events). To get a live-version link: GTM › Versions › the live version › Preview › Share.
 
 **Tag Assistant runs in both checks or in neither.** Its debug mode changes how some tags behave. On LookFantastic, a preview check with Tag Assistant against a live check without it showed 14 failures; with neither using it, there was 1. So without a live-version link, Tag Assistant is skipped in both checks and the run says so. `--no-tag-assistant` turns it off.
 

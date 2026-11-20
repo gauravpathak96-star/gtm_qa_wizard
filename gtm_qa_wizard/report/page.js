@@ -62,6 +62,19 @@ function dlSource(raw,scen,stepName,key){
 const srcDiv=t=>t?'<div class="why">'+esc(t)+'</div>':'';
 const varTable=(V,b)=>'<div class="tablewrap"><table><thead><tr><th>Result</th><th>Journey / action</th><th>Variable</th><th>Live</th><th>Preview</th><th>What</th></tr></thead><tbody>'
   +V.map(r=>'<tr><td>'+pill('fail','Failed')+'</td><td>'+esc(r.scen+' · '+r.action.name)+'</td><td class="mono">'+esc(r.tag)+(r.was?'<div class="why">was '+esc(r.was)+'</div>':'')+'</td><td class="mono">'+esc(String(r.live).slice(0,200))+srcDiv(dlSource(b.live,r.scen,r.action.name,r.was||r.tag))+'</td><td class="mono">'+esc(String(r.cur).slice(0,200))+srcDiv(dlSource(b.preview,r.scen,r.action.name,r.tag))+'</td><td>'+esc(r.what)+(r.detail.length?'<div class="why">'+r.detail.map(esc).join('<br>')+'</div>':'')+'</td></tr>').join('')+'</tbody></table></div>';
+// ---- The event each tag fired on, as the runner read it from Tag Assistant's message list
+// (runs from before this have none). Shown under the tag in the Tag fired columns: "on cheq_response".
+let CUR=null;
+function tagEvents(which,scen,step,name){
+  const raw=CUR&&(which==='live'?CUR.live:CUR.preview);if(!raw)return[];
+  const L=scen==='Opt-out'?((raw.optout||{}).steps||[]):(raw.steps||[]);const st=L.find(s=>s.name===step);
+  const t=st&&(st.tags||[]).find(x=>x.name===name);return(t&&t.events)||[];
+}
+const rgTagsBase=rgTags;
+rgTags=function(x,which){
+  const L=rgTagsBase(x,which);if(x.agg)return L;
+  return L.map(t=>{const ev=tagEvents(which,x.scen,x.step,t.n);return ev.length?Object.assign({},t,{note:(t.note?t.note+'; ':'')+'on '+ev.join(', ')}):t;});
+};
 // ---- Live only: one check (e.g. after publishing), no comparison. Same table, Live columns only.
 // A row fails when, on its own, the check shows tracking that's wrong:
 //   consent: a vendor sends calls before the consent choice or after Reject all (strictly necessary
@@ -109,6 +122,7 @@ const auditRow=x=>'<tr><td>'+pill(x.st==='fail'?'fail':'pass',x.st==='fail'?'Fai
   +'<td>'+esc(rgTracked(x,'live'))+'</td><td>'+rgTagCell(rgTags(x,'live'))+'</td></tr>';
 const auditTable=L=>'<div class="tablewrap"><table><thead><tr><th>Result</th><th>Journey / action</th><th>Getting tracked? (Live)</th><th>Tag fired (Live)</th></tr></thead><tbody>'+L.map(auditRow).join('')+'</tbody></table></div>';
 function auditSection(b,i){
+  CUR=b;
   const noise=b.noise_events||[];const [lv,n]=stripNoise(b.live,noise);const N=norm(lv);const A=auditCheck(N);
   if(n)A.cov.push('Known noise for this site, left out ('+n+' calls): '+noise.join(', '));
   const nf=A.failed.length,st=nf?'fail':'pass',passed=A.rows.filter(x=>x.st!=='fail');
@@ -124,6 +138,7 @@ function auditSection(b,i){
 const out=[];let html='';
 R.brands.forEach((b,i)=>{
   if(b.live&&(R.live_only||!b.preview)){const a=auditSection(b,i);html+=a.html;out.push(a.out);return;}
+  CUR=b;
   const {G,LS,cmp,V}=brandResult(b);const nf=G.failed.length+V.length;
   const st=!G.pairs.length?'skip':nf?'fail':'pass';
   // what a noise test found: the events to consider adding to the site's noise_events
